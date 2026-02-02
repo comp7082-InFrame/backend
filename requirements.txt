@@ -9,3 +9,4 @@ opencv-python==4.9.0.80
 numpy==1.26.3
 pydantic-settings==2.1.0
 python-dotenv==1.0.0
+websockets==12.0
