@@ -2,14 +2,24 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.database import get_db
 from app.models import Person, AttendanceEvent as AttendanceEventModel, CurrentPresence
 from app.schemas import AttendanceEventResponse, AttendanceCurrentResponse, CurrentPresenceResponse
-from app.api.deps import get_presence_tracker
 
 router = APIRouter()
+
+
+def _to_event_response(e: AttendanceEventModel) -> AttendanceEventResponse:
+    return AttendanceEventResponse(
+        id=e.id,
+        person_id=e.person_id,
+        person_name=e.person.name,
+        event_type=e.event_type,
+        confidence=e.confidence,
+        timestamp=e.timestamp
+    )
 
 
 @router.get("/current", response_model=AttendanceCurrentResponse)
@@ -68,36 +78,16 @@ async def get_attendance_history(
 
     events = query.order_by(desc(AttendanceEventModel.timestamp)).limit(limit).all()
 
-    return [
-        AttendanceEventResponse(
-            id=e.id,
-            person_id=e.person_id,
-            person_name=e.person.name,
-            event_type=e.event_type,
-            confidence=e.confidence,
-            timestamp=e.timestamp
-        )
-        for e in events
-    ]
+    return [_to_event_response(e) for e in events]
 
 
 @router.get("/today", response_model=List[AttendanceEventResponse])
 async def get_today_attendance(db: Session = Depends(get_db)):
     """Get today's attendance events."""
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
     events = db.query(AttendanceEventModel).join(Person).filter(
         AttendanceEventModel.timestamp >= today_start
     ).order_by(desc(AttendanceEventModel.timestamp)).all()
 
-    return [
-        AttendanceEventResponse(
-            id=e.id,
-            person_id=e.person_id,
-            person_name=e.person.name,
-            event_type=e.event_type,
-            confidence=e.confidence,
-            timestamp=e.timestamp
-        )
-        for e in events
-    ]
+    return [_to_event_response(e) for e in events]
