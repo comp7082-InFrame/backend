@@ -1,10 +1,7 @@
-from dotenv import load_dotenv
-load_dotenv()
-
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 import os
 
 from app.database import engine, Base, SessionLocal
@@ -14,13 +11,14 @@ from app.api.deps import init_services
 from app.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown."""
     # Startup
-    print("Starting up...")
+    logger.info("Starting up...")
 
     # Create database tables
     Base.metadata.create_all(bind=engine)
@@ -32,14 +30,14 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         init_services(db)
-        print("Services initialized successfully")
+        logger.info("Services initialized successfully")
     finally:
         db.close()
 
     yield
 
     # Shutdown
-    print("Shutting down...")
+    logger.info("Shutting down...")
 
 
 app = FastAPI(
@@ -63,10 +61,6 @@ app.include_router(api_router, prefix="/api")
 
 # Include WebSocket route (no prefix)
 app.include_router(streaming_router)
-
-# Serve uploaded photos
-if os.path.exists(settings.UPLOAD_DIR):
-    app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 
 @app.get("/")
