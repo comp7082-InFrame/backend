@@ -1,3 +1,4 @@
+import logging
 from typing import Dict
 import numpy as np
 from sqlalchemy.orm import Session
@@ -11,6 +12,10 @@ face_service: FaceService = None
 presence_tracker: PresenceTracker = None
 person_names: Dict[int, str] = {}
 
+logger = logging.getLogger(__name__)
+
+EXPECTED_EMBEDDING_BYTES = 512 * 4  # 2048 bytes for 512-dim float32
+
 
 def init_services(db: Session):
     """Initialize global services with data from database."""
@@ -23,6 +28,13 @@ def init_services(db: Session):
     person_names.clear()
 
     for person in persons:
+        if len(person.face_encoding) != EXPECTED_EMBEDDING_BYTES:
+            logger.warning(
+                "Person %s (id=%d) has a stale dlib encoding (%d bytes) — "
+                "re-enroll to enable recognition.",
+                person.name, person.id, len(person.face_encoding)
+            )
+            continue
         known_encodings[person.id] = bytes_to_encoding(person.face_encoding)
         person_names[person.id] = person.name
 
@@ -51,6 +63,12 @@ def add_person_to_services(person_id: int, name: str, encoding: np.ndarray):
     global face_service, person_names
     if face_service:
         face_service.add_encoding(person_id, encoding)
+    else:
+        logger.warning(
+            "face_service is None — enrollment for person_id=%d saved to DB "
+            "but recognition not updated. Restart the server to apply.",
+            person_id
+        )
     person_names[person_id] = name
 
 
