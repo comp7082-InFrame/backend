@@ -8,9 +8,8 @@ import numpy as np
 from app.database import get_db
 from app.models import Person
 from app.schemas import PersonResponse
-from app.services import FaceService
 from app.utils.encoding import encoding_to_bytes
-from app.api.deps import add_person_to_services, remove_person_from_services
+from app.api.deps import add_person_to_services, remove_person_from_services, get_face_service
 from app.config import get_settings
 
 router = APIRouter()
@@ -39,17 +38,19 @@ async def enroll_person(
     if image is None:
         raise HTTPException(status_code=400, detail="Invalid image file")
 
-    # Extract face encoding
-    face_service = FaceService()
+    # Extract face encoding using the global singleton (avoids reloading ML models)
+    face_service = get_face_service()
+    if face_service is None:
+        raise HTTPException(status_code=503, detail="Face recognition service is not initialized")
+
     encoding = face_service.extract_face_encoding(image)
 
     if encoding is None:
         raise HTTPException(status_code=400, detail="No face detected in image")
 
-    # Save photo to disk
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    # Save photo to disk (absolute path prevents working-directory fragility)
     photo_filename = f"{uuid.uuid4()}.jpg"
-    photo_path = os.path.join(settings.UPLOAD_DIR, photo_filename)
+    photo_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, photo_filename))
     cv2.imwrite(photo_path, image)
 
     # Create person record
@@ -73,7 +74,7 @@ async def remove_person(
     person_id: int,
     db: Session = Depends(get_db)
 ):
-    """Remove a person from the system."""
+    """Deactivate a person (soft delete — preserves attendance history)."""
     person = db.query(Person).filter(Person.id == person_id).first()
 
     if not person:
@@ -83,8 +84,8 @@ async def remove_person(
     if person.photo_path and os.path.exists(person.photo_path):
         os.remove(person.photo_path)
 
-    # Remove from database
-    db.delete(person)
+    # Soft-delete: mark as inactive to preserve attendance history
+    person.is_active = False
     db.commit()
 
     # Remove from running services
@@ -118,7 +119,10 @@ async def update_person(
         if image is None:
             raise HTTPException(status_code=400, detail="Invalid image file")
 
-        face_service = FaceService()
+        face_service = get_face_service()
+        if face_service is None:
+            raise HTTPException(status_code=503, detail="Face recognition service is not initialized")
+
         encoding = face_service.extract_face_encoding(image)
 
         if encoding is None:
@@ -128,9 +132,9 @@ async def update_person(
         if person.photo_path and os.path.exists(person.photo_path):
             os.remove(person.photo_path)
 
-        # Save new photo
+        # Save new photo (absolute path)
         photo_filename = f"{uuid.uuid4()}.jpg"
-        photo_path = os.path.join(settings.UPLOAD_DIR, photo_filename)
+        photo_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, photo_filename))
         cv2.imwrite(photo_path, image)
 
         person.photo_path = photo_path

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.routes import enrollment, roster, attendance, streaming
+from app.api.routes import enrollment, roster, attendance
 
 api_router = APIRouter()
 
