@@ -1,21 +1,21 @@
 import base64
-import asyncio
-from datetime import datetime
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+import logging
+from datetime import datetime, timezone
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import AttendanceEvent as AttendanceEventModel, CurrentPresence
 from app.services import CameraService
-from app.services.face_service import draw_face_boxes
+from app.utils.drawing import draw_face_boxes
 from app.api.deps import (
     get_face_service,
     get_presence_tracker,
     get_person_names,
-    init_services
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 async def save_attendance_event(event, db: Session):
@@ -55,15 +55,19 @@ async def video_stream(websocket: WebSocket):
     """
     await websocket.accept()
 
-    # Get database session
+    # SessionLocal() is used here intentionally instead of Depends(get_db).
+    # WebSocket connections are long-lived; FastAPI's request-scoped DI does
+    # not apply to WebSocket handlers the same way it does to HTTP routes.
     db = SessionLocal()
 
     try:
-        # Initialize services if needed
         face_service = get_face_service()
         if face_service is None:
-            init_services(db)
-            face_service = get_face_service()
+            await websocket.send_json({
+                "type": "error",
+                "message": "Face recognition service is not initialized"
+            })
+            return
 
         presence_tracker = get_presence_tracker()
         person_names = get_person_names()
@@ -79,49 +83,67 @@ async def video_stream(websocket: WebSocket):
 
         try:
             async for frame in camera.get_frames():
-                # Process frame for face detection
-                faces = face_service.process_frame(frame)
+                try:
+                    # Process frame for face detection
+                    faces = face_service.process_frame(frame)
 
-                # Add names to face detections
-                for face in faces:
-                    person_id = face.get("person_id")
-                    if person_id:
-                        face["name"] = person_names.get(person_id, f"ID: {person_id}")
-                        face["status"] = presence_tracker.get_status_for_display(person_id)
-                    else:
-                        face["name"] = None
-                        face["status"] = "unknown"
+                    # Add names to face detections
+                    for face in faces:
+                        person_id = face.get("person_id")
+                        if person_id:
+                            face["name"] = person_names.get(person_id, f"ID: {person_id}")
+                            face["status"] = presence_tracker.get_status_for_display(person_id)
+                        else:
+                            face["name"] = None
+                            face["status"] = "unknown"
 
-                # Update presence tracking
-                events = presence_tracker.update(faces)
+                    # Update presence tracking
+                    events = presence_tracker.update(faces)
 
-                # Save events to database and send updates
-                for event in events:
-                    await save_attendance_event(event, db)
+                    # Save events to database and send updates
+                    for event in events:
+                        await save_attendance_event(event, db)
 
+                        await websocket.send_json({
+                            "type": "attendance_update",
+                            "event": event.event_type,
+                            "person_id": event.person_id,
+                            "name": person_names.get(event.person_id, f"ID: {event.person_id}"),
+                            "confidence": event.confidence,
+                            "timestamp": event.timestamp.isoformat()
+                        })
+
+                    # Update last_seen for currently-detected present persons
+                    now = datetime.now(timezone.utc)
+                    present_detected = {
+                        face.get("person_id") for face in faces
+                        if face.get("person_id") is not None
+                        and face.get("person_id") in presence_tracker.get_present_ids()
+                    }
+                    if present_detected:
+                        db.query(CurrentPresence).filter(
+                            CurrentPresence.person_id.in_(present_detected)
+                        ).update({"last_seen": now}, synchronize_session=False)
+                        db.commit()
+
+                    # Draw annotations on frame
+                    annotated_frame = draw_face_boxes(frame, faces, person_names)
+
+                    # Encode frame
+                    jpeg_bytes = camera.encode_frame(annotated_frame)
+                    frame_b64 = base64.b64encode(jpeg_bytes).decode('utf-8')
+
+                    # Send frame message
                     await websocket.send_json({
-                        "type": "attendance_update",
-                        "event": event.event_type,
-                        "person_id": event.person_id,
-                        "name": person_names.get(event.person_id, f"ID: {event.person_id}"),
-                        "confidence": event.confidence,
-                        "timestamp": event.timestamp.isoformat()
+                        "type": "frame",
+                        "image": frame_b64,
+                        "faces": faces,
+                        "timestamp": now.isoformat()
                     })
 
-                # Draw annotations on frame
-                annotated_frame = draw_face_boxes(frame, faces, person_names)
-
-                # Encode frame
-                jpeg_bytes = camera.encode_frame(annotated_frame)
-                frame_b64 = base64.b64encode(jpeg_bytes).decode('utf-8')
-
-                # Send frame message
-                await websocket.send_json({
-                    "type": "frame",
-                    "image": frame_b64,
-                    "faces": faces,
-                    "timestamp": datetime.utcnow().isoformat()
-                })
+                except Exception as e:
+                    logger.error("Frame processing error: %s", e)
+                    continue
 
         except WebSocketDisconnect:
             pass
