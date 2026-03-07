@@ -3,10 +3,6 @@ from datetime import datetime
 from typing import Optional, List
 
 
-class PersonCreate(BaseModel):
-    name: str
-
-
 class PersonResponse(BaseModel):
     id: int
     name: str
