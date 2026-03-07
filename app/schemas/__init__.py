@@ -1,4 +1,4 @@
-from app.schemas.person import PersonCreate, PersonResponse, PersonListResponse
+from app.schemas.person import PersonResponse, PersonListResponse
 from app.schemas.attendance import (
     AttendanceEventResponse,
     CurrentPresenceResponse,
@@ -9,7 +9,6 @@ from app.schemas.attendance import (
 )
 
 __all__ = [
-    "PersonCreate",
     "PersonResponse",
     "PersonListResponse",
     "AttendanceEventResponse",
