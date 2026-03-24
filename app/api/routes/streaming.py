@@ -1,6 +1,7 @@
 import base64
 import logging
 from datetime import datetime, timezone
+import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,8 @@ from app.api.deps import (
     get_face_service,
     get_presence_tracker,
     get_person_names,
+    init_services,
+    start_services_for_session,
 )
 
 router = APIRouter()
@@ -45,7 +48,11 @@ async def save_attendance_event(event, db: Session):
 
 
 @router.websocket("/ws/stream")
-async def video_stream(websocket: WebSocket):
+async def video_stream(
+    websocket: WebSocket,
+    session_id: int | None = None,
+    class_id: uuid.UUID | None = None,
+):
     """
     WebSocket endpoint for real-time video streaming with face recognition.
 
@@ -62,6 +69,12 @@ async def video_stream(websocket: WebSocket):
 
     try:
         face_service = get_face_service()
+        if session_id is not None:
+            face_service = start_services_for_session(session_id, db)
+        elif class_id is not None:
+            init_services(db, class_id=class_id)
+            face_service = get_face_service()
+
         if face_service is None:
             await websocket.send_json({
                 "type": "error",

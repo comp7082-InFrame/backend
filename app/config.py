@@ -1,3 +1,4 @@
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -25,8 +26,7 @@ class Settings(BaseSettings):
     # Storage
     UPLOAD_DIR: str = "uploads"
 
-    class Config:
-        env_file = ".env"
+    model_config = ConfigDict(env_file=".env")
 
 
 @lru_cache()

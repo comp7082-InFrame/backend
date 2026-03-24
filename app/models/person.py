@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, LargeBinary, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, LargeBinary, Boolean, DateTime, ForeignKey, Uuid
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -8,6 +8,7 @@ class Person(Base):
     __tablename__ = "persons"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), unique=True, nullable=True)
     name = Column(String(255), nullable=False)
     face_encoding = Column(LargeBinary, nullable=False)
     photo_path = Column(String(512), nullable=True)
