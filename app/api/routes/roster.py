@@ -1,20 +1,26 @@
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import List
 import os
 
 from app.database import get_db
-from app.models import Person
+from app.models import ClassUsers, Person
 from app.schemas import PersonResponse, PersonListResponse
 
 router = APIRouter()
 
 
 @router.get("/", response_model=PersonListResponse)
-async def get_roster(db: Session = Depends(get_db)):
-    """Get all enrolled people."""
-    persons = db.query(Person).filter(Person.is_active == True).all()
+async def get_roster(class_id: uuid.UUID | None = None, db: Session = Depends(get_db)):
+    """Get all enrolled people, optionally filtered by class."""
+    query = db.query(Person).filter(Person.is_active == True)
+    if class_id is not None:
+        query = (
+            query.join(ClassUsers, ClassUsers.person_id == Person.id)
+            .filter(ClassUsers.class_id == class_id)
+        )
+    persons = query.all()
     return PersonListResponse(
         persons=[PersonResponse.model_validate(p) for p in persons],
         total=len(persons)
