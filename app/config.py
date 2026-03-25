@@ -1,3 +1,4 @@
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
@@ -7,8 +8,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/attendance"
 
     # Face recognition
-    FACE_RECOGNITION_TOLERANCE: float = 0.6
-    FACE_RECOGNITION_MODEL: str = "hog"  # "hog" for CPU, "cnn" for GPU
+    DETECTOR_BACKEND: str = "retinaface"  # "retinaface" or "yunet"
+    YUNET_MODEL_PATH: str = "models/face_detection_yunet_2023mar.onnx"
+    ARCFACE_MODEL_PACK: str = "buffalo_l"
+    SIMILARITY_THRESHOLD: float = 0.35
 
     # Entry/Exit tracking
     ENTRY_FRAME_THRESHOLD: int = 5   # Frames to confirm entry (~0.5s at 10 FPS)
@@ -23,8 +26,7 @@ class Settings(BaseSettings):
     # Storage
     UPLOAD_DIR: str = "uploads"
 
-    class Config:
-        env_file = ".env"
+    model_config = ConfigDict(env_file=".env")
 
 
 @lru_cache()

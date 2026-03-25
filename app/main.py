@@ -1,6 +1,4 @@
-from dotenv import load_dotenv
-load_dotenv()
-
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,13 +12,14 @@ from app.api.deps import init_services
 from app.config import get_settings
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown."""
     # Startup
-    print("Starting up...")
+    logger.info("Starting up...")
 
     # Create database tables
     Base.metadata.create_all(bind=engine)
@@ -31,15 +30,26 @@ async def lifespan(app: FastAPI):
     # Initialize face recognition services
     db = SessionLocal()
     try:
-        init_services(db)
-        print("Services initialized successfully")
+        from app.models import AttendanceSession
+
+        latest_session = (
+            db.query(AttendanceSession)
+            .order_by(AttendanceSession.id.desc())
+            .first()
+        )
+        if latest_session is not None:
+            init_services(db, class_id=latest_session.class_id)
+            logger.info("Services initialized for session %s", latest_session.id)
+        else:
+            init_services(db)
+            logger.info("Services initialized with global roster")
     finally:
         db.close()
 
     yield
 
     # Shutdown
-    print("Shutting down...")
+    logger.info("Shutting down...")
 
 
 app = FastAPI(
@@ -65,8 +75,7 @@ app.include_router(api_router, prefix="/api")
 app.include_router(streaming_router)
 
 # Serve uploaded photos
-if os.path.exists(settings.UPLOAD_DIR):
-    app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR, check_dir=False), name="uploads")
 
 
 @app.get("/")

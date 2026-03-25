@@ -1,22 +1,42 @@
+import uuid
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.database import get_db
-from app.models import Person, AttendanceEvent as AttendanceEventModel, CurrentPresence
+from app.models import ClassUsers, Person, AttendanceEvent as AttendanceEventModel, CurrentPresence
 from app.schemas import AttendanceEventResponse, AttendanceCurrentResponse, CurrentPresenceResponse
-from app.api.deps import get_presence_tracker
 
 router = APIRouter()
 
 
+def _to_event_response(e: AttendanceEventModel) -> AttendanceEventResponse:
+    return AttendanceEventResponse(
+        id=e.id,
+        person_id=e.person_id,
+        person_name=e.person.name,
+        event_type=e.event_type,
+        confidence=e.confidence,
+        timestamp=e.timestamp
+    )
+
+
 @router.get("/current", response_model=AttendanceCurrentResponse)
-async def get_current_attendance(db: Session = Depends(get_db)):
+async def get_current_attendance(
+    class_id: Optional[uuid.UUID] = Query(None, description="Filter by class ID"),
+    db: Session = Depends(get_db),
+):
     """Get current attendance status - who is present vs absent."""
     # Get all active persons
-    all_persons = db.query(Person).filter(Person.is_active == True).all()
+    query = db.query(Person).filter(Person.is_active == True)
+    if class_id is not None:
+        query = (
+            query.join(ClassUsers, ClassUsers.person_id == Person.id)
+            .filter(ClassUsers.class_id == class_id)
+        )
+    all_persons = query.all()
     all_person_ids = {p.id for p in all_persons}
     person_map = {p.id: p for p in all_persons}
 
@@ -49,6 +69,7 @@ async def get_current_attendance(db: Session = Depends(get_db)):
 @router.get("/history", response_model=List[AttendanceEventResponse])
 async def get_attendance_history(
     person_id: Optional[int] = Query(None, description="Filter by person ID"),
+    class_id: Optional[uuid.UUID] = Query(None, description="Filter by class ID"),
     event_type: Optional[str] = Query(None, description="Filter by event type (entry/exit)"),
     since: Optional[datetime] = Query(None, description="Filter events after this time"),
     limit: int = Query(100, le=1000, description="Maximum number of events to return"),
@@ -60,6 +81,12 @@ async def get_attendance_history(
     if person_id:
         query = query.filter(AttendanceEventModel.person_id == person_id)
 
+    if class_id:
+        query = (
+            query.join(ClassUsers, ClassUsers.person_id == AttendanceEventModel.person_id)
+            .filter(ClassUsers.class_id == class_id)
+        )
+
     if event_type:
         query = query.filter(AttendanceEventModel.event_type == event_type)
 
@@ -68,36 +95,25 @@ async def get_attendance_history(
 
     events = query.order_by(desc(AttendanceEventModel.timestamp)).limit(limit).all()
 
-    return [
-        AttendanceEventResponse(
-            id=e.id,
-            person_id=e.person_id,
-            person_name=e.person.name,
-            event_type=e.event_type,
-            confidence=e.confidence,
-            timestamp=e.timestamp
-        )
-        for e in events
-    ]
+    return [_to_event_response(e) for e in events]
 
 
 @router.get("/today", response_model=List[AttendanceEventResponse])
-async def get_today_attendance(db: Session = Depends(get_db)):
+async def get_today_attendance(
+    class_id: Optional[uuid.UUID] = Query(None, description="Filter by class ID"),
+    db: Session = Depends(get_db),
+):
     """Get today's attendance events."""
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    events = db.query(AttendanceEventModel).join(Person).filter(
+    query = db.query(AttendanceEventModel).join(Person).filter(
         AttendanceEventModel.timestamp >= today_start
-    ).order_by(desc(AttendanceEventModel.timestamp)).all()
-
-    return [
-        AttendanceEventResponse(
-            id=e.id,
-            person_id=e.person_id,
-            person_name=e.person.name,
-            event_type=e.event_type,
-            confidence=e.confidence,
-            timestamp=e.timestamp
+    )
+    if class_id is not None:
+        query = (
+            query.join(ClassUsers, ClassUsers.person_id == AttendanceEventModel.person_id)
+            .filter(ClassUsers.class_id == class_id)
         )
-        for e in events
-    ]
+    events = query.order_by(desc(AttendanceEventModel.timestamp)).all()
+
+    return [_to_event_response(e) for e in events]

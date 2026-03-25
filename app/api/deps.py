@@ -1,8 +1,11 @@
+import logging
 from typing import Dict
+import uuid
 import numpy as np
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Person
+from app.models import AttendanceSession, ClassUsers, Person
 from app.utils.encoding import bytes_to_encoding
 from app.services import FaceService, PresenceTracker
 
@@ -11,24 +14,56 @@ face_service: FaceService = None
 presence_tracker: PresenceTracker = None
 person_names: Dict[int, str] = {}
 
+logger = logging.getLogger(__name__)
 
-def init_services(db: Session):
-    """Initialize global services with data from database."""
+EXPECTED_EMBEDDING_BYTES = 512 * 4  # 2048 bytes for 512-dim float32
+
+
+def init_services(db: Session, class_id: uuid.UUID | None = None):
+    """Initialize recognition services from the database.
+
+    When class_id is provided, only persons linked to that class are loaded.
+    Otherwise all active persons are loaded as a global fallback.
+    """
     global face_service, presence_tracker, person_names
 
-    # Load all active persons and their encodings
-    persons = db.query(Person).filter(Person.is_active == True).all()
+    if class_id is not None:
+        persons = (
+            db.query(Person)
+            .join(ClassUsers, ClassUsers.person_id == Person.id)
+            .filter(ClassUsers.class_id == class_id, Person.is_active == True)
+            .all()
+        )
+    else:
+        persons = db.query(Person).filter(Person.is_active == True).all()
 
     known_encodings = {}
     person_names.clear()
 
     for person in persons:
+        if len(person.face_encoding) != EXPECTED_EMBEDDING_BYTES:
+            logger.warning(
+                "Person %s (id=%d) has a stale dlib encoding (%d bytes) — "
+                "re-enroll to enable recognition.",
+                person.name, person.id, len(person.face_encoding)
+            )
+            continue
         known_encodings[person.id] = bytes_to_encoding(person.face_encoding)
         person_names[person.id] = person.name
 
     # Initialize services
     face_service = FaceService(known_encodings)
     presence_tracker = PresenceTracker()
+
+
+def start_services_for_session(session_id: int, db: Session) -> FaceService:
+    """Initialize services for a specific attendance session."""
+    sess = db.query(AttendanceSession).filter(AttendanceSession.id == session_id).one_or_none()
+    if sess is None:
+        raise HTTPException(status_code=404, detail="attendance session not found")
+
+    init_services(db, class_id=sess.class_id)
+    return get_face_service()
 
 
 def get_face_service() -> FaceService:
@@ -51,6 +86,12 @@ def add_person_to_services(person_id: int, name: str, encoding: np.ndarray):
     global face_service, person_names
     if face_service:
         face_service.add_encoding(person_id, encoding)
+    else:
+        logger.warning(
+            "face_service is None — enrollment for person_id=%d saved to DB "
+            "but recognition not updated. Restart the server to apply.",
+            person_id
+        )
     person_names[person_id] = name
 
 

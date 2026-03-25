@@ -1,6 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Set, Optional
 from app.config import get_settings
 
@@ -86,7 +86,7 @@ class PresenceTracker:
             List of attendance events (entries/exits) triggered by this update
         """
         events = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Get set of detected person IDs (excluding unknown faces)
         detected_ids = set()
