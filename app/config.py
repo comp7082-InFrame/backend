@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     FRAME_WIDTH: int = 640
     FRAME_HEIGHT: int = 480
     JPEG_QUALITY: int = 70
+    CAMERA_SCAN_MAX_INDEX: int = 10
 
     # Storage
     UPLOAD_DIR: str = "uploads"

@@ -52,6 +52,7 @@ async def video_stream(
     websocket: WebSocket,
     session_id: int | None = None,
     class_id: uuid.UUID | None = None,
+    camera_id: int = 0,
 ):
     """
     WebSocket endpoint for real-time video streaming with face recognition.
@@ -86,7 +87,7 @@ async def video_stream(
         person_names = get_person_names()
 
         # Initialize camera
-        camera = CameraService()
+        camera = CameraService(camera_id)
         if not camera.start():
             await websocket.send_json({
                 "type": "error",

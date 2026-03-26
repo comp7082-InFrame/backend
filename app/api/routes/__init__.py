@@ -3,6 +3,7 @@ from app.api.routes import (
     attendance,
     attendance_record,
     buidling,
+    cameras,
     campus,
     classes,
     courses,
@@ -19,6 +20,7 @@ api_router = APIRouter()
 api_router.include_router(enrollment.router, prefix="/enrollment", tags=["enrollment"])
 api_router.include_router(roster.router, prefix="/roster", tags=["roster"])
 api_router.include_router(attendance.router, prefix="/attendance", tags=["attendance"])
+api_router.include_router(cameras.router, prefix="/cameras", tags=["cameras"])
 api_router.include_router(campus.router, prefix="/campuses", tags=["campuses"])
 api_router.include_router(buidling.router, prefix="/buildings", tags=["buildings"])
 api_router.include_router(room.router, prefix="/rooms", tags=["rooms"])
