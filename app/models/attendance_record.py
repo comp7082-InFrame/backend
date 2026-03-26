@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Boolean, ForeignKey, TIMESTAMP, String
+from sqlalchemy import Column, Integer, Boolean, ForeignKey, TIMESTAMP, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -11,7 +11,7 @@ class AttendanceRecord(Base):
     student_id = Column(UUID(as_uuid=True), ForeignKey("student.user_id", ondelete="CASCADE"), nullable=False)
     status = Column(String(127), default="absent")
     face_recognized = Column(Boolean, default=False)
-    timestamp = Column(TIMESTAMP, server_default="CURRENT_TIMESTAMP")
+    timestamp = Column(TIMESTAMP, server_default=func.now())
 
     session = relationship("AttendanceSession", back_populates="records")
 
