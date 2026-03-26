@@ -1,6 +1,6 @@
 
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import TIMESTAMP, Column, ForeignKey, Integer, UniqueConstraint, Text
+from sqlalchemy import TIMESTAMP, Column, ForeignKey, Integer, UniqueConstraint, Text, func
 from sqlalchemy.orm import relationship
 from app.models.teacher import Teacher
 from app.database import Base
@@ -13,6 +13,6 @@ class TeacherScheduledClass(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     teacher_id = Column(UUID(as_uuid=True), ForeignKey("teacher.user_id", ondelete="CASCADE"), nullable=False)
     class_id = Column(UUID(as_uuid=True), ForeignKey("class.id", ondelete="CASCADE"), nullable=False)
-    created_at = Column(TIMESTAMP, server_default="CURRENT_TIMESTAMP")
-    role = Column(Text, default='lecturer')
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    role = Column(Text, default="lecturer")
 
