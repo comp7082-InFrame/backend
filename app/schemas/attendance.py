@@ -1,6 +1,6 @@
 from pydantic import BaseModel
-from datetime import datetime
 from typing import Optional, List
+from uuid import UUID
 
 
 class BoundingBox(BaseModel):
@@ -11,7 +11,7 @@ class BoundingBox(BaseModel):
 
 
 class FaceDetection(BaseModel):
-    person_id: Optional[int] = None
+    user_id: Optional[UUID] = None
     name: Optional[str] = None
     confidence: float
     bbox: BoundingBox
@@ -28,34 +28,6 @@ class StreamFrame(BaseModel):
 class AttendanceUpdate(BaseModel):
     type: str = "attendance_update"
     event: str  # 'entry' or 'exit'
-    person_id: int
+    user_id: UUID
     name: str
     timestamp: str
-
-
-class AttendanceEventResponse(BaseModel):
-    id: int
-    person_id: int
-    person_name: str
-    event_type: str
-    confidence: Optional[float] = None
-    timestamp: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class CurrentPresenceResponse(BaseModel):
-    person_id: int
-    name: str
-    entered_at: datetime
-    last_seen: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class AttendanceCurrentResponse(BaseModel):
-    present: List[CurrentPresenceResponse]
-    absent: List[dict]  # List of {id, name}
-    total_enrolled: int

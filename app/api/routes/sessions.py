@@ -10,7 +10,7 @@ from app.models import AttendanceSession
 from app.models.attendance_record import AttendanceRecord
 from app.models.classes import Classes
 from app.models.course import Course
-from app.models.student import Student
+from app.models.user import User
 from app.schemas import AttendanceSessionCreate, AttendanceSessionResponse
 
 router = APIRouter()
@@ -53,12 +53,12 @@ def getSessions(course_id: uuid.UUID, class_id:Optional[uuid.UUID]=None, db: Ses
     
 
 @router.get("/records")
-def getSessionRecords(session_id: int, db: Session = Depends(get_db)):
+def getSessionRecords(session_id: uuid.UUID, db: Session = Depends(get_db)):
     query = (
-        db.query(AttendanceRecord, Student.first_name, Student.last_name, Student.student_number)
-        .join(Student, Student.user_id == AttendanceRecord.student_id)
+        db.query(AttendanceRecord, User.first_name, User.last_name, User.student_number)
+        .join(User, User.id == AttendanceRecord.student_id)
         .filter(AttendanceRecord.session_id == session_id)
-        .order_by(Student.student_number.asc())
+        .order_by(User.student_number.asc())
          )
 
     results = query.all()
