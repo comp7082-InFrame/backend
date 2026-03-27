@@ -36,3 +36,11 @@ class ClassUserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AdminEnrollmentResponse(BaseModel):
+    user_id: UUID
+    student_number: str
+    name: str
+    photo_path: Optional[str] = None
+    enrolled: bool = True

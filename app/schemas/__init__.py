@@ -20,7 +20,7 @@ from app.schemas.student import StudentCreate, StudentResponse
 from app.schemas.student_course import StudentCourseCreate, StudentCourseResponse
 from app.schemas.teacher import TeacherCreate, TeacherResponse
 from app.schemas.term import TermCreate, TermResponse
-from app.schemas.user import ClassUserResponse, UserCreate, UserResponse
+from app.schemas.user import AdminEnrollmentResponse, ClassUserResponse, UserCreate, UserResponse
 
 __all__ = [
     "PersonResponse",
@@ -61,6 +61,7 @@ __all__ = [
     "TeacherResponse",
     "TermCreate",
     "TermResponse",
+    "AdminEnrollmentResponse",
     "ClassUserResponse",
     "UserCreate",
     "UserResponse",
