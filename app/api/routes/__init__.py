@@ -6,7 +6,7 @@ from app.api.routes import (
     campus,
     classes,
     courses,
-    enrollment,
+    face_registration,
     room,
     roster,
     sessions,
@@ -16,7 +16,7 @@ from app.api.routes import (
 
 api_router = APIRouter()
 
-api_router.include_router(enrollment.router, prefix="/enrollment", tags=["enrollment"])
+api_router.include_router(face_registration.router, prefix="/face-registration", tags=["face-registration"])
 api_router.include_router(roster.router, prefix="/roster", tags=["roster"])
 api_router.include_router(attendance.router, prefix="/attendance", tags=["attendance"])
 api_router.include_router(campus.router, prefix="/campuses", tags=["campuses"])

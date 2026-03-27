@@ -4,7 +4,7 @@ from typing import Optional
 
 
 class CourseBase(BaseModel):
-    term_id:UUID
+    term_id: UUID
     name: str
     description: Optional[str] = None
     active: bool = True

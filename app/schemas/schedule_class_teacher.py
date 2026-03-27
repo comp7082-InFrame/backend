@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-
 from pydantic import BaseModel
 
 
@@ -16,7 +15,7 @@ class TeacherScheduledClassCreate(TeacherScheduledClassBase):
 
 
 class TeacherScheduledClassResponse(TeacherScheduledClassBase):
-    id: int
+    id: UUID
     created_at: datetime
 
     class Config:

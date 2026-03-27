@@ -1,52 +1,47 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-import os
+from typing import List, Optional
+from pydantic import BaseModel
 
 from app.database import get_db
-from app.models import ClassUsers, Person
-from app.schemas import PersonResponse, PersonListResponse
+from app.models.user import ClassUsers
 
 router = APIRouter()
 
 
-@router.get("/", response_model=PersonListResponse)
-async def get_roster(class_id: uuid.UUID | None = None, db: Session = Depends(get_db)):
-    """Get all enrolled people, optionally filtered by class."""
-    query = db.query(Person).filter(Person.is_active == True)
-    if class_id is not None:
-        query = (
-            query.join(ClassUsers, ClassUsers.person_id == Person.id)
-            .filter(ClassUsers.class_id == class_id)
-        )
-    persons = query.all()
-    return PersonListResponse(
-        persons=[PersonResponse.model_validate(p) for p in persons],
-        total=len(persons)
+class RosterEntry(BaseModel):
+    id: uuid.UUID
+    first_name: str
+    last_name: str
+    email: str
+    class_id: uuid.UUID
+    face_registered: bool
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/", response_model=List[RosterEntry])
+async def get_roster(
+    class_id: uuid.UUID,
+    db: Session = Depends(get_db)
+):
+    """Get all students in a class with their face registration status."""
+    rows = (
+        db.query(ClassUsers)
+        .filter(ClassUsers.class_id == class_id, ClassUsers.role == "student")
+        .all()
     )
 
-
-@router.get("/{person_id}", response_model=PersonResponse)
-async def get_person(person_id: int, db: Session = Depends(get_db)):
-    """Get a specific person by ID."""
-    person = db.query(Person).filter(Person.id == person_id, Person.is_active == True).first()
-
-    if not person:
-        raise HTTPException(status_code=404, detail="Person not found")
-
-    return person
-
-
-@router.get("/{person_id}/photo")
-async def get_person_photo(person_id: int, db: Session = Depends(get_db)):
-    """Get a person's enrolled photo."""
-    person = db.query(Person).filter(Person.id == person_id).first()
-
-    if not person:
-        raise HTTPException(status_code=404, detail="Person not found")
-
-    if not person.photo_path or not os.path.exists(person.photo_path):
-        raise HTTPException(status_code=404, detail="Photo not found")
-
-    return FileResponse(person.photo_path, media_type="image/jpeg")
+    return [
+        RosterEntry(
+            id=row.id,
+            first_name=row.first_name,
+            last_name=row.last_name,
+            email=row.email,
+            class_id=row.class_id,
+            face_registered=row.photo_encoding is not None,
+        )
+        for row in rows
+    ]
