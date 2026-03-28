@@ -10,7 +10,7 @@ from app.schemas.room import RoomCreate, RoomResponse, RoomUpdate
 from app.schemas.schedule_class_teacher import TeacherScheduledClassCreate, TeacherScheduledClassResponse
 from app.schemas.student_course import StudentCourseCreate, StudentCourseResponse
 from app.schemas.term import TermCreate, TermResponse
-from app.schemas.user import ClassUserResponse, UserCreate, UserResponse, UserUpdate
+from app.schemas.user import AdminStudentResponse, ClassUserResponse, UserCreate, UserResponse, UserUpdate
 
 __all__ = [
     "FaceDetection",
@@ -43,6 +43,7 @@ __all__ = [
     "TermCreate",
     "TermResponse",
     "ClassUserResponse",
+    "AdminStudentResponse",
     "UserCreate",
     "UserResponse",
     "UserUpdate",
