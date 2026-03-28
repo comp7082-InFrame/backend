@@ -6,14 +6,17 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.models import AttendanceSession, ClassUsers, User
 from app.utils.encoding import bytes_to_encoding
-from app.services import FaceService, PresenceTracker
+from app.config import get_settings
+from app.services import FaceService, LivePresenceTracker, PresenceTracker
 
 # Global instances (initialized on startup)
 face_service: FaceService = None
 presence_tracker: PresenceTracker = None
+live_presence_tracker: LivePresenceTracker = None
 user_names: Dict[uuid.UUID, str] = {}
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 EXPECTED_EMBEDDING_BYTES = 512 * 4  # 2048 bytes for 512-dim float32
 
@@ -24,7 +27,7 @@ def init_services(db: Session, class_id: uuid.UUID | None = None):
     When class_id is provided, only users linked to that class are loaded.
     Otherwise all active users with face encodings are loaded.
     """
-    global face_service, presence_tracker, user_names
+    global face_service, presence_tracker, live_presence_tracker, user_names
 
     if class_id is not None:
         rows = (
@@ -53,6 +56,7 @@ def init_services(db: Session, class_id: uuid.UUID | None = None):
 
     face_service = FaceService(known_encodings)
     presence_tracker = PresenceTracker()
+    live_presence_tracker = LivePresenceTracker(ttl_seconds=settings.LIVE_PRESENCE_TTL_SECONDS)
 
 
 def start_services_for_session(session_id: uuid.UUID, db: Session) -> FaceService:
@@ -75,6 +79,10 @@ def get_presence_tracker() -> PresenceTracker:
 
 def get_user_names() -> Dict[uuid.UUID, str]:
     return user_names
+
+
+def get_live_presence_tracker() -> LivePresenceTracker:
+    return live_presence_tracker
 
 
 def add_user_to_services(user_id: uuid.UUID, name: str, encoding: np.ndarray):
