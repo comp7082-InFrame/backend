@@ -2,13 +2,9 @@ import base64
 import logging
 from datetime import datetime, timezone
 import uuid
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
-from app.models.regconition_history import RecognitionHistory
-from app.services import CameraService
-from app.utils.drawing import draw_face_boxes
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
 from app.api.deps import (
     get_face_service,
     get_live_presence_tracker,
@@ -17,24 +13,13 @@ from app.api.deps import (
     init_services,
     start_services_for_session,
 )
+from app.database import SessionLocal
+from app.services import CameraService
+from app.services.session_attendance_service import record_attendance_from_recognition
+from app.utils.drawing import draw_face_boxes
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-async def save_recognition_event(user_id: uuid.UUID, session_id: uuid.UUID, confidence: float, timestamp: datetime, db: Session):
-    """Save a confirmed face recognition event to recognition_history.
-    The Postgres trigger on recognition_history will update attendance_record automatically.
-    """
-    db_event = RecognitionHistory(
-        attendance_session_id=session_id,
-        user_id=user_id,
-        confidence=confidence,
-        recognized=True,
-        timestamp=timestamp
-    )
-    db.add(db_event)
-    db.commit()
 
 
 @router.websocket("/ws/stream")
@@ -52,8 +37,6 @@ async def video_stream(
     """
     await websocket.accept()
 
-    # SessionLocal() used directly — WebSocket connections are long-lived and
-    # FastAPI's request-scoped DI does not apply to WebSocket handlers.
     db = SessionLocal()
 
     try:
@@ -67,7 +50,7 @@ async def video_stream(
         if face_service is None:
             await websocket.send_json({
                 "type": "error",
-                "message": "Face recognition service is not initialized"
+                "message": "Face recognition service is not initialized",
             })
             return
 
@@ -79,7 +62,7 @@ async def video_stream(
         if not camera.start():
             await websocket.send_json({
                 "type": "error",
-                "message": "Failed to start camera"
+                "message": "Failed to start camera",
             })
             return
 
@@ -88,7 +71,6 @@ async def video_stream(
                 try:
                     faces = face_service.process_frame(frame)
 
-                    # Attach names and status to each detection
                     for face in faces:
                         user_id = face.get("user_id")
                         if user_id:
@@ -103,29 +85,25 @@ async def video_stream(
                             [face["user_id"] for face in faces if face.get("user_id") is not None]
                         )
 
-                    # Check for newly confirmed entries
                     events = presence_tracker.update(faces)
 
                     for event in events:
-                        # Save to recognition_history — trigger marks student present
-                        if session_id is not None:
-                            await save_recognition_event(
-                                user_id=event.user_id,
-                                session_id=session_id,
-                                confidence=event.confidence,
-                                timestamp=event.timestamp,
-                                db=db
-                            )
+                        record_attendance_from_recognition(
+                            db=db,
+                            user_id=event.user_id,
+                            confidence=event.confidence,
+                            timestamp=event.timestamp,
+                            explicit_session_id=session_id,
+                        )
 
                         await websocket.send_json({
                             "type": "attendance_update",
                             "user_id": str(event.user_id),
                             "name": user_names.get(event.user_id, f"ID: {event.user_id}"),
                             "confidence": event.confidence,
-                            "timestamp": event.timestamp.isoformat()
+                            "timestamp": event.timestamp.isoformat(),
                         })
 
-                    # Draw annotations and send frame
                     annotated_frame = draw_face_boxes(frame, faces, user_names)
                     jpeg_bytes = camera.encode_frame(annotated_frame)
                     frame_b64 = base64.b64encode(jpeg_bytes).decode("utf-8")
@@ -134,7 +112,7 @@ async def video_stream(
                         "type": "frame",
                         "image": frame_b64,
                         "faces": faces,
-                        "timestamp": datetime.now(timezone.utc).isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                     })
 
                 except Exception as e:
