@@ -11,6 +11,7 @@ from app.services import CameraService
 from app.utils.drawing import draw_face_boxes
 from app.api.deps import (
     get_face_service,
+    get_live_presence_tracker,
     get_presence_tracker,
     get_user_names,
     init_services,
@@ -71,6 +72,7 @@ async def video_stream(
             return
 
         presence_tracker = get_presence_tracker()
+        live_presence_tracker = get_live_presence_tracker()
         user_names = get_user_names()
 
         camera = CameraService()
@@ -95,6 +97,11 @@ async def video_stream(
                         else:
                             face["name"] = None
                             face["status"] = "unknown"
+
+                    if live_presence_tracker is not None:
+                        live_presence_tracker.mark_seen(
+                            [face["user_id"] for face in faces if face.get("user_id") is not None]
+                        )
 
                     # Check for newly confirmed entries
                     events = presence_tracker.update(faces)

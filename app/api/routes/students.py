@@ -7,14 +7,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.api.deps import add_user_to_services, get_face_service, get_presence_tracker
+from app.api.deps import add_user_to_services, get_face_service, get_live_presence_tracker
 from app.config import get_settings
 from app.database import get_db
 from app.models.course import Course
 from app.models.student_course import StudentCourse
 from app.models.user import User
 from app.schemas.user import AdminStudentResponse, UserResponse
-from app.utils.admin_students import is_currently_seen, parse_course_ids
+from app.utils.admin_students import parse_course_ids
 from app.utils.encoding import encoding_to_bytes
 
 router = APIRouter()
@@ -22,8 +22,8 @@ settings = get_settings()
 
 
 def build_admin_student_response(student: User, course_ids: list[uuid.UUID]) -> AdminStudentResponse:
-    tracker = get_presence_tracker()
-    current_status = tracker.get_status_for_display(student.id) if tracker is not None else None
+    tracker = get_live_presence_tracker()
+    current_seen = tracker.is_currently_seen(student.id) if tracker is not None else False
 
     return AdminStudentResponse(
         id=student.id,
@@ -32,7 +32,7 @@ def build_admin_student_response(student: User, course_ids: list[uuid.UUID]) -> 
         last_name=student.last_name,
         email=student.email,
         course_ids=course_ids,
-        current_seen=is_currently_seen(current_status),
+        current_seen=current_seen,
         face_registered=student.photo_encoding is not None,
         photo_path=student.photo_path,
         active=bool(student.active),
