@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Entry/Exit tracking
     ENTRY_FRAME_THRESHOLD: int = 5   # Frames to confirm entry (~0.5s at 10 FPS)
     EXIT_FRAME_THRESHOLD: int = 10   # Frames to confirm exit (~1.0s at 10 FPS)
+    LIVE_PRESENCE_TTL_SECONDS: float = 2.0
 
     # Video processing
     PROCESSING_FPS: int = 10
