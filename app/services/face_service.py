@@ -84,7 +84,7 @@ class FaceService:
         Match a 512-dim unit-vector embedding against known faces using cosine similarity.
 
         Returns:
-            Tuple of (person_id or None, confidence score)
+            Tuple of (user_id or None, confidence score)
         """
         if self._known_matrix is None:
             return None, 0.0
