@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from uuid import UUID
 
@@ -50,6 +50,22 @@ class ClassUserResponse(BaseModel):
     role: str
     class_id: UUID
     photo_path: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AdminStudentResponse(BaseModel):
+    id: UUID
+    student_number: Optional[str] = None
+    first_name: str
+    last_name: str
+    email: str
+    course_ids: List[UUID] = Field(default_factory=list)
+    current_seen: bool = False
+    face_registered: bool = False
+    photo_path: Optional[str] = None
+    active: bool = True
 
     class Config:
         from_attributes = True
