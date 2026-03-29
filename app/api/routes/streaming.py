@@ -1,9 +1,11 @@
+import asyncio
 import base64
 import logging
 from datetime import datetime, timezone
 import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from uvicorn.protocols.utils import ClientDisconnected
 
 from app.api.deps import (
     get_face_service,
@@ -108,21 +110,34 @@ async def video_stream(
                     jpeg_bytes = camera.encode_frame(annotated_frame)
                     frame_b64 = base64.b64encode(jpeg_bytes).decode("utf-8")
 
+                    # Convert UUID objects to strings for JSON serialization
+                    serializable_faces = [
+                        {**face, "user_id": str(face["user_id"]) if face.get("user_id") else None}
+                        for face in faces
+                    ]
+
                     await websocket.send_json({
                         "type": "frame",
                         "image": frame_b64,
-                        "faces": faces,
+                        "faces": serializable_faces,
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     })
 
+                except asyncio.CancelledError:
+                    logger.info("Camera stream cancelled")
+                    break
+                except ClientDisconnected:
+                    logger.info("Client disconnected during frame send")
+                    break
                 except Exception as e:
-                    logger.error("Frame processing error: %s", e)
+                    logger.error("Frame processing error: %s", str(e), exc_info=True)
                     continue
 
         except WebSocketDisconnect:
-            pass
+            logger.info("WebSocket disconnected")
         finally:
             camera.stop()
+            logger.info("Camera stopped")
 
     finally:
         db.close()

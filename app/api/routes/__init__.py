@@ -11,7 +11,9 @@ from app.api.routes import (
     roster,
     sessions,
     students,
+    teachers,
     term,
+    users,
 )
 
 api_router = APIRouter()
@@ -28,3 +30,5 @@ api_router.include_router(classes.router, prefix="/classes", tags=["classes"])
 api_router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 api_router.include_router(attendance_record.router, prefix="/attendances", tags=["attendances"])
 api_router.include_router(students.router, prefix="/students", tags=["students"])
+api_router.include_router(teachers.router, prefix="/teachers", tags=["teachers"])
+api_router.include_router(users.router, prefix="/users", tags=["users"])

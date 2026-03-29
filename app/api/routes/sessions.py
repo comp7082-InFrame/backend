@@ -2,7 +2,9 @@ from typing import Optional
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.api.deps import init_services
 from app.database import get_db
@@ -97,3 +99,23 @@ def getSessionRecords(session_id: uuid.UUID, db: Session = Depends(get_db)):
         )
 
     return response
+
+
+class EndSessionRequest(BaseModel):
+    session_id: uuid.UUID
+
+
+@router.post("/end")
+def end_session(request: EndSessionRequest, db: Session = Depends(get_db)):
+    """End a session and mark absent students."""
+    session_id = request.session_id
+
+    session = db.query(AttendanceSession).filter(AttendanceSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Mark absent students
+    db.execute(text("SELECT mark_absent_attendance_records(:session_id)"), {"session_id": session_id})
+    db.commit()
+
+    return {"status": "success", "message": "Session ended and absent students marked"}
