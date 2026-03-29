@@ -12,7 +12,9 @@ env/
 ENV/
 
 # Environment variables
-.env.example
+.env
+.env.*
+!.env.example
 
 # Photos
 uploads/

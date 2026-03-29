@@ -10,7 +10,7 @@ def draw_face_boxes(frame: np.ndarray, faces: List[dict], names: Dict[int, str] 
     Args:
         frame: BGR frame
         faces: List of face detection results
-        names: Dict mapping person_id to name
+        names: Dict mapping user_id to name
 
     Returns:
         Annotated frame
@@ -21,12 +21,12 @@ def draw_face_boxes(frame: np.ndarray, faces: List[dict], names: Dict[int, str] 
     for face in faces:
         bbox = face["bbox"]
         x, y, w, h = bbox["x"], bbox["y"], bbox["width"], bbox["height"]
-        person_id = face.get("person_id")
+        user_id = face.get("user_id")
         confidence = face.get("confidence", 0)
 
-        if person_id:
+        if user_id:
             color = (0, 255, 0)  # Green for recognized
-            name = names.get(person_id, f"ID: {person_id}")
+            name = names.get(user_id, f"ID: {user_id}")
             label = f"{name} ({confidence:.0%})"
         else:
             color = (0, 0, 255)  # Red for unknown

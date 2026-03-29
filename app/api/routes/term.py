@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 import uuid
 
 from fastapi import APIRouter, Depends
@@ -28,13 +29,12 @@ def get_terms(
 
 @router.get("/", response_model=List[TermResponse])
 def get_terms(
-    term_id: Optional[uuid.UUID] = None,
+    term_id: Optional[UUID] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Term)
 
     if term_id:
-        query = query.filter(term_id == Term.id)
-
+        query = query.filter(Term.id == term_id)
 
     return query.all()

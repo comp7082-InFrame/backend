@@ -1,5 +1,4 @@
 from typing import List
-
 from pydantic import BaseModel
 from datetime import datetime
 from uuid import UUID
@@ -20,7 +19,7 @@ class AttendanceSessionCreate(AttendanceSessionBase):
 
 
 class AttendanceSessionResponse(AttendanceSessionBase):
-    id: int
+    id: UUID
     records: List[AttendanceRecordResponse] = []
 
     class Config:
