@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-
 from pydantic import BaseModel
 
 
@@ -13,11 +12,11 @@ class RecognitionHistoryBase(BaseModel):
 
 
 class RecognitionHistoryCreate(RecognitionHistoryBase):
-    attendance_session_id: int
+    attendance_session_id: UUID
 
 
 class RecognitionHistoryResponse(RecognitionHistoryBase):
-    id: int
+    id: UUID
     timestamp: datetime
 
     class Config:

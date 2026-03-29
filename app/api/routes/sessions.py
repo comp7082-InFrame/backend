@@ -10,7 +10,8 @@ from app.models import AttendanceSession
 from app.models.attendance_record import AttendanceRecord
 from app.models.classes import Classes
 from app.models.course import Course
-from app.models.student import Student
+from app.models.student_course import StudentCourse
+from app.models.user import User
 from app.schemas import AttendanceSessionCreate, AttendanceSessionResponse
 
 router = APIRouter()
@@ -53,23 +54,46 @@ def getSessions(course_id: uuid.UUID, class_id:Optional[uuid.UUID]=None, db: Ses
     
 
 @router.get("/records")
-def getSessionRecords(session_id: int, db: Session = Depends(get_db)):
-    query = (
-        db.query(AttendanceRecord, Student.first_name, Student.last_name, Student.student_number)
-        .join(Student, Student.user_id == AttendanceRecord.student_id)
+def getSessionRecords(session_id: uuid.UUID, db: Session = Depends(get_db)):
+    session = db.query(AttendanceSession).filter(AttendanceSession.id == session_id).first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    class_row = db.query(Classes).filter(Classes.id == session.class_id).first()
+    if class_row is None:
+        raise HTTPException(status_code=404, detail="Class not found")
+
+    students = (
+        db.query(User.id, User.first_name, User.last_name, User.student_number)
+        .join(StudentCourse, StudentCourse.student_id == User.id)
+        .filter(StudentCourse.course_id == class_row.course_id)
+        .filter(User.active.is_(True))
+        .order_by(User.student_number.asc(), User.last_name.asc(), User.first_name.asc())
+        .all()
+    )
+
+    records = (
+        db.query(AttendanceRecord)
         .filter(AttendanceRecord.session_id == session_id)
-        .order_by(Student.student_number.asc())
-         )
+        .all()
+    )
+    record_map = {record.student_id: record for record in records}
 
-    results = query.all()
+    response = []
+    for student_id, first_name, last_name, student_number in students:
+        record = record_map.get(student_id)
+        response.append(
+            {
+                "id": str(record.id) if record else f"{session_id}:{student_id}",
+                "session_id": session_id,
+                "student_id": student_id,
+                "status": record.status if record else "absent",
+                "face_recognized": record.face_recognized if record else False,
+                "timestamp": record.timestamp if record else None,
+                "first_name": first_name,
+                "last_name": last_name,
+                "student_number": student_number,
+            }
+        )
 
-    response = [
-        {
-            **session.__dict__,
-            "first_name": first_name,
-            "last_name": last_name,
-            "student_number": student_number
-        }
-        for session, first_name, last_name, student_number in results
-    ]
     return response

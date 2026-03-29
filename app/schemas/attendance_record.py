@@ -1,8 +1,8 @@
 from typing import Optional
-
 from pydantic import BaseModel
 from datetime import datetime
 from uuid import UUID
+
 
 class AttendanceRecordBase(BaseModel):
     student_id: UUID
@@ -12,11 +12,11 @@ class AttendanceRecordBase(BaseModel):
 
 
 class AttendanceRecordCreate(AttendanceRecordBase):
-    session_id: int
+    session_id: UUID
 
 
 class AttendanceRecordResponse(AttendanceRecordBase):
-    id: int
+    id: UUID
 
     class Config:
         from_attributes = True
