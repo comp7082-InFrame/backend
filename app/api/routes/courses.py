@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[CourseResponse])
 def get_courses(
-    term_id: Optional[uuid.UUID] = None,
+    term_id: uuid.UUID,
     course_id: Optional[uuid.UUID]=None,
     teacher_id: Optional[uuid.UUID]=None,
     db: Session = Depends(get_db)
