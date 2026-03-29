@@ -69,3 +69,19 @@ class AdminStudentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AdminTeacherResponse(BaseModel):
+    id: UUID
+    first_name: str
+    last_name: str
+    email: str
+    employee_number: Optional[str] = None
+    department: Optional[str] = None
+    title: Optional[str] = None
+    face_registered: bool = False
+    photo_path: Optional[str] = None
+    active: bool = True
+
+    class Config:
+        from_attributes = True
