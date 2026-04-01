@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Iterable, Optional
 
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.models.attendance_record import AttendanceRecord
 from app.models.attendance_session import AttendanceSession
@@ -123,28 +124,15 @@ def record_attendance_from_recognition(
     )
     db.add(recognition)
 
-    attendance_record = (
-        db.query(AttendanceRecord)
-        .filter(
-            AttendanceRecord.session_id == session_row.id,
-            AttendanceRecord.student_id == user_id,
-        )
-        .one_or_none()
+    db.commit()
+
+    return session_row.id
+
+
+async def mark_absent_student(session_id, db: Session): 
+    db.execute(
+        text("SELECT mark_absent_attendance_records(:session_id)"),
+        {"session_id": session_id}
     )
 
-    if attendance_record is None:
-        attendance_record = AttendanceRecord(
-            session_id=session_row.id,
-            student_id=user_id,
-            status="present",
-            face_recognized=True,
-            timestamp=timestamp,
-        )
-        db.add(attendance_record)
-    else:
-        attendance_record.status = "present"
-        attendance_record.face_recognized = True
-        attendance_record.timestamp = timestamp
-
     db.commit()
-    return session_row.id

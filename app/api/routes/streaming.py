@@ -17,7 +17,7 @@ from app.api.deps import (
 )
 from app.database import SessionLocal
 from app.services import CameraService
-from app.services.session_attendance_service import record_attendance_from_recognition
+from app.services.session_attendance_service import mark_absent_student, record_attendance_from_recognition
 from app.utils.drawing import draw_face_boxes
 
 router = APIRouter()
@@ -90,7 +90,7 @@ async def video_stream(
                     events = presence_tracker.update(faces)
 
                     for event in events:
-                        record_attendance_from_recognition(
+                        await record_attendance_from_recognition(
                             db=db,
                             user_id=event.user_id,
                             confidence=event.confidence,
@@ -104,6 +104,7 @@ async def video_stream(
                             "name": user_names.get(event.user_id, f"ID: {event.user_id}"),
                             "confidence": event.confidence,
                             "timestamp": event.timestamp.isoformat(),
+                            "session_id": str(session_id) if session_id else None,
                         })
 
                     annotated_frame = draw_face_boxes(frame, faces, user_names)
@@ -136,6 +137,7 @@ async def video_stream(
         except WebSocketDisconnect:
             logger.info("WebSocket disconnected")
         finally:
+            await mark_absent_student(session_id, db)
             camera.stop()
             logger.info("Camera stopped")
 

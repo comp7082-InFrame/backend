@@ -5,6 +5,12 @@ import shutil
 from uuid import UUID
 import uuid
 
+from app.api.deps import get_face_service
+import cv2
+import numpy as np
+
+from app.config import get_settings
+from app.utils.encoding import encoding_to_bytes
 from fastapi import APIRouter, Depends, Form, File, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -14,6 +20,7 @@ from app.models.user import User
 from app.schemas.user import UserResponse
 
 router = APIRouter()
+settings = get_settings()
 
 
 """
@@ -74,7 +81,7 @@ async def update_user(
     department: Optional[str] = Form(None),
     title: Optional[str] = Form(None),
     active: Optional[bool] = Form(None),
-    photo: Optional[UploadFile] = File(None),
+    photo: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
     # Get existing user
@@ -110,14 +117,25 @@ async def update_user(
 
     # Handle photo upload
     if photo:
-        upload_dir = "uploads/photos"
-        os.makedirs(upload_dir, exist_ok=True)
-        file_ext = os.path.splitext(photo.filename)[1]
-        filename = f"{uuid.uuid4().hex}{file_ext}"
-        file_path = os.path.join(upload_dir, filename)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(photo.file, buffer)
-        update_data["photo_path"] = file_path
+        contents = await photo.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if image is None:
+            raise HTTPException(status_code=400, detail="Invalid image file")
+
+        face_service = get_face_service()
+        if face_service is None:
+            raise HTTPException(status_code=503, detail="Face recognition service is not initialized")
+
+        encoding = face_service.extract_face_encoding(image)
+        if encoding is None:
+            raise HTTPException(status_code=400, detail="No face detected in image")
+
+        photo_filename = f"{uuid.uuid4()}.jpg"
+        photo_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, photo_filename))
+        cv2.imwrite(photo_path, image)
+        update_data["photo_path"] = photo_path
+        update_data["photo_encoding"] = encoding_to_bytes(encoding)
 
     # Apply updates
     for field, value in update_data.items():
