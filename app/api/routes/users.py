@@ -81,7 +81,7 @@ async def update_user(
     department: Optional[str] = Form(None),
     title: Optional[str] = Form(None),
     active: Optional[bool] = Form(None),
-    photo: UploadFile = File(...),
+    photo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     # Get existing user
