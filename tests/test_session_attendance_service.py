@@ -350,7 +350,7 @@ class SessionAttendanceServiceTests(unittest.TestCase):
         if importlib.util.find_spec("pydantic_settings") is None:
             self.skipTest("backend dependencies are not installed in this environment")
 
-        from app.api.routes.sessions import getSessions
+        from app.api.routes.sessions import get_sessions
 
         session = SimpleNamespace(
             id=uuid.uuid4(),
@@ -366,7 +366,7 @@ class SessionAttendanceServiceTests(unittest.TestCase):
             session_record_context=None,
         )
 
-        result = getSessions(course_id=uuid.uuid4(), db=db)
+        result = get_sessions(course_id=uuid.uuid4(), db=db)
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].id, session.id)
@@ -378,7 +378,7 @@ class SessionAttendanceServiceTests(unittest.TestCase):
         if importlib.util.find_spec("pydantic_settings") is None:
             self.skipTest("backend dependencies are not installed in this environment")
 
-        from app.api.routes.sessions import getSessionRecords
+        from app.api.routes.sessions import get_session_records
 
         session_id = uuid.uuid4()
         student_id = uuid.uuid4()
@@ -404,7 +404,7 @@ class SessionAttendanceServiceTests(unittest.TestCase):
             ),
         )
 
-        result = getSessionRecords(session_id=session_id, db=db)
+        result = get_session_records(session_id=session_id, db=db)
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].id, str(record_id))
@@ -419,7 +419,7 @@ class SessionAttendanceServiceTests(unittest.TestCase):
         if importlib.util.find_spec("pydantic_settings") is None:
             self.skipTest("backend dependencies are not installed in this environment")
 
-        from app.api.routes.sessions import getSessionRecords
+        from app.api.routes.sessions import get_session_records
 
         session_id = uuid.uuid4()
         student_id = uuid.uuid4()
@@ -435,7 +435,7 @@ class SessionAttendanceServiceTests(unittest.TestCase):
             ),
         )
 
-        result = getSessionRecords(session_id=session_id, db=db)
+        result = get_session_records(session_id=session_id, db=db)
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].id, f"{session_id}:{student_id}")

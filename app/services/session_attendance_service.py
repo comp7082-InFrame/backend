@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.attendance_record import AttendanceRecord
 from app.models.attendance_session import AttendanceSession
 from app.models.classes import Classes
-from app.models.regconition_history import RecognitionHistory
+from app.models.recognition_history import RecognitionHistory
 from app.models.schedule_class_teacher import TeacherScheduledClass
 from app.models.student_course import StudentCourse
 

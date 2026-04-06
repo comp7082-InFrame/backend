@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from typing import Optional
 
@@ -27,5 +27,4 @@ class RoomUpdate(BaseModel):
 class RoomResponse(RoomBase):
     id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
