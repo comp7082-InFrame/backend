@@ -15,7 +15,12 @@ from app.models.room import Room
 from app.models.schedule_class_teacher import TeacherScheduledClass
 from app.models.student_course import StudentCourse
 from app.models.user import User
-from app.schemas import AttendanceSessionCreate, AttendanceSessionResponse
+from app.schemas import (
+    AttendanceSessionCreate,
+    AttendanceSessionListItem,
+    AttendanceSessionResponse,
+    SessionAttendanceRecordItem,
+)
 from app.services.session_attendance_service import mark_absent_students_for_session
 
 router = APIRouter()
@@ -73,7 +78,7 @@ def create_session(
 
     return db_sess
 
-@router.get("/")
+@router.get("/", response_model=list[AttendanceSessionListItem])
 def getSessions(course_id: uuid.UUID, class_id:Optional[uuid.UUID]=None, db: Session = Depends(get_db)):
     query = (
         db.query(AttendanceSession, Course.name.label('course_name'), Course.term_id )
@@ -86,18 +91,22 @@ def getSessions(course_id: uuid.UUID, class_id:Optional[uuid.UUID]=None, db: Ses
         query = query.filter(Classes.id == class_id)
     results = query.all()
 
-    response = [
-        {
-            **session.__dict__,
-            "course_name": course_name,
-            "term_id": term_id
-        }
+    return [
+        AttendanceSessionListItem(
+            id=session.id,
+            class_id=session.class_id,
+            teacher_id=session.teacher_id,
+            room_id=session.room_id,
+            start_time=session.start_time,
+            end_time=session.end_time,
+            course_name=course_name,
+            term_id=term_id,
+        )
         for session, course_name, term_id in results
     ]
-    return response
     
 
-@router.get("/records")
+@router.get("/records", response_model=list[SessionAttendanceRecordItem])
 def getSessionRecords(session_id: uuid.UUID, db: Session = Depends(get_db)):
     session = db.query(AttendanceSession).filter(AttendanceSession.id == session_id).first()
     if session is None:
@@ -123,24 +132,21 @@ def getSessionRecords(session_id: uuid.UUID, db: Session = Depends(get_db)):
     )
     record_map = {record.student_id: record for record in records}
 
-    response = []
-    for student_id, first_name, last_name, student_number in students:
-        record = record_map.get(student_id)
-        response.append(
-            {
-                "id": str(record.id) if record else f"{session_id}:{student_id}",
-                "session_id": session_id,
-                "student_id": student_id,
-                "status": record.status if record else "absent",
-                "face_recognized": record.face_recognized if record else False,
-                "timestamp": record.timestamp if record else None,
-                "first_name": first_name,
-                "last_name": last_name,
-                "student_number": student_number,
-            }
+    return [
+        SessionAttendanceRecordItem(
+            id=str(record.id) if record else f"{session_id}:{student_id}",
+            session_id=session_id,
+            student_id=student_id,
+            status=record.status if record else "absent",
+            face_recognized=record.face_recognized if record else False,
+            timestamp=record.timestamp if record else None,
+            first_name=first_name,
+            last_name=last_name,
+            student_number=student_number,
         )
-
-    return response
+        for student_id, first_name, last_name, student_number in students
+        for record in [record_map.get(student_id)]
+    ]
 
 
 class EndSessionRequest(BaseModel):
