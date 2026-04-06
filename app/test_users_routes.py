@@ -1,0 +1,125 @@
+import asyncio
+import unittest
+import uuid
+
+from fastapi import HTTPException
+
+from app.api.routes.users import get_user_by_id, update_user
+
+
+class FakeQuery:
+    def __init__(self, db):
+        self.db = db
+
+    def filter(self, *args, **kwargs):
+        return self
+
+    def order_by(self, *args, **kwargs):
+        return self
+
+    def first(self):
+        return self.db.single_user
+
+    def all(self):
+        return list(self.db.users)
+
+
+class FakeDB:
+    def __init__(self, single_user=None, users=None):
+        self.single_user = single_user
+        self.users = users or []
+        self.committed = False
+        self.refreshed = None
+
+    def query(self, model):
+        return FakeQuery(self)
+
+    def commit(self):
+        self.committed = True
+
+    def refresh(self, user):
+        self.refreshed = user
+
+
+class FakeUser:
+    def __init__(self, user_id=None):
+        self.id = user_id or uuid.uuid4()
+        self.first_name = "Leonardo"
+        self.last_name = "Hamato"
+        self.email = "leo@example.com"
+        self.role = ["student"]
+        self.photo_path = None
+        self.student_number = None
+        self.major = None
+        self.employee_number = None
+        self.department = None
+        self.title = None
+        self.active = True
+
+
+class UserRouteTests(unittest.TestCase):
+    def test_get_user_by_id_returns_user(self):
+        user = FakeUser()
+        db = FakeDB(single_user=user)
+
+        result = get_user_by_id(user.id, db=db)
+
+        self.assertIs(result, user)
+
+    def test_get_user_by_id_raises_404_when_missing(self):
+        db = FakeDB(single_user=None)
+
+        with self.assertRaises(HTTPException) as exc_info:
+            get_user_by_id(uuid.uuid4(), db=db)
+
+        self.assertEqual(exc_info.exception.status_code, 404)
+        self.assertEqual(exc_info.exception.detail, "User not found")
+
+    def test_update_user_updates_fields_and_commits(self):
+        user = FakeUser()
+        db = FakeDB(single_user=user)
+
+        result = asyncio.run(
+            update_user(
+                user_uuid=str(user.id),
+                first_name="Michelangelo",
+                last_name=None,
+                email="mikey@example.com",
+                role='["teacher"]',
+                student_number=None,
+                major=None,
+                employee_number=None,
+                department=None,
+                title=None,
+                active=False,
+                photo=None,
+                db=db,
+            )
+        )
+
+        self.assertIs(result, user)
+        self.assertEqual(user.first_name, "Michelangelo")
+        self.assertEqual(user.email, "mikey@example.com")
+        self.assertEqual(user.role, ["teacher"])
+        self.assertFalse(user.active)
+        self.assertTrue(db.committed)
+        self.assertIs(db.refreshed, user)
+
+    def test_update_user_raises_404_when_missing(self):
+        db = FakeDB(single_user=None)
+
+        with self.assertRaises(HTTPException) as exc_info:
+            asyncio.run(
+                update_user(
+                    user_uuid=str(uuid.uuid4()),
+                    photo=None,
+                    db=db,
+                )
+            )
+
+        self.assertEqual(exc_info.exception.status_code, 404)
+        self.assertEqual(exc_info.exception.detail, "User not found")
+
+
+if __name__ == "__main__":
+    unittest.main()
