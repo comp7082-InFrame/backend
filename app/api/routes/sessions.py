@@ -4,7 +4,6 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 
 from app.api.deps import init_services
 from app.database import get_db
@@ -15,6 +14,7 @@ from app.models.course import Course
 from app.models.student_course import StudentCourse
 from app.models.user import User
 from app.schemas import AttendanceSessionCreate, AttendanceSessionResponse
+from app.services.session_attendance_service import mark_absent_students_for_session
 
 router = APIRouter()
 
@@ -114,8 +114,7 @@ def end_session(request: EndSessionRequest, db: Session = Depends(get_db)):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Mark absent students
-    db.execute(text("SELECT mark_absent_attendance_records(:session_id)"), {"session_id": session_id})
+    mark_absent_students_for_session(db, session)
     db.commit()
 
     return {"status": "success", "message": "Session ended and absent students marked"}
