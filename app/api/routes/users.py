@@ -1,11 +1,10 @@
-from http.client import HTTPException
 import json
 import os
 import shutil
 from uuid import UUID
 import uuid
 
-from fastapi import APIRouter, Depends, Form, File, UploadFile
+from fastapi import APIRouter, Depends, Form, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -14,6 +13,13 @@ from app.models.user import User
 from app.schemas.user import UserResponse
 
 router = APIRouter()
+
+
+def _get_user(db: Session, user_id: UUID | str) -> User:
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 
 """
@@ -58,7 +64,7 @@ def get_user_by_id(
     Returns:
         The user with the specified ID
     """
-    return db.query(User).filter(User.id == user_id).first()
+    return _get_user(db, user_id)
 
 
 @router.post("/{user_uuid}/", response_model=UserResponse)
@@ -78,9 +84,7 @@ async def update_user(
     db: Session = Depends(get_db)
 ):
     # Get existing user
-    user = db.query(User).filter(User.id == user_uuid).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = _get_user(db, user_uuid)
 
     # Build update dictionary, only include non-None values
     update_data = {}
