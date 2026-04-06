@@ -11,6 +11,8 @@ from app.models import AttendanceSession
 from app.models.attendance_record import AttendanceRecord
 from app.models.classes import Classes
 from app.models.course import Course
+from app.models.room import Room
+from app.models.schedule_class_teacher import TeacherScheduledClass
 from app.models.student_course import StudentCourse
 from app.models.user import User
 from app.schemas import AttendanceSessionCreate, AttendanceSessionResponse
@@ -18,11 +20,51 @@ from app.services.session_attendance_service import mark_absent_students_for_ses
 
 router = APIRouter()
 
+
+def _validate_session_payload(
+    payload: AttendanceSessionCreate,
+    db: Session,
+) -> None:
+    if payload.end_time <= payload.start_time:
+        raise HTTPException(status_code=400, detail="end_time must be after start_time")
+
+    class_row = db.query(Classes).filter(Classes.id == payload.class_id).first()
+    if class_row is None:
+        raise HTTPException(status_code=404, detail="Class not found")
+
+    teacher = (
+        db.query(User)
+        .filter(User.id == payload.teacher_id, User.role.contains(["teacher"]))
+        .first()
+    )
+    if teacher is None:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+
+    room = db.query(Room).filter(Room.id == payload.room_id).first()
+    if room is None:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    teacher_assignment = (
+        db.query(TeacherScheduledClass)
+        .filter(
+            TeacherScheduledClass.class_id == payload.class_id,
+            TeacherScheduledClass.teacher_id == payload.teacher_id,
+        )
+        .first()
+    )
+    if teacher_assignment is None:
+        raise HTTPException(status_code=400, detail="Teacher is not assigned to class")
+
+    if class_row.room_id != payload.room_id:
+        raise HTTPException(status_code=400, detail="Room does not match class")
+
+
 @router.post("/", response_model=AttendanceSessionResponse)
 def create_session(
     payload: AttendanceSessionCreate,
     db: Session = Depends(get_db),
 ):
+    _validate_session_payload(payload, db)
     db_sess = AttendanceSession(**payload.model_dump())
     db.add(db_sess)
     db.commit()

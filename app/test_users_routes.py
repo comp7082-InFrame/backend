@@ -1,6 +1,7 @@
 import asyncio
 import unittest
 import uuid
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
@@ -49,6 +50,7 @@ class FakeUser:
         self.email = "leo@example.com"
         self.role = ["student"]
         self.photo_path = None
+        self.photo_encoding = None
         self.student_number = None
         self.major = None
         self.employee_number = None
@@ -105,6 +107,47 @@ class UserRouteTests(unittest.TestCase):
         self.assertTrue(db.committed)
         self.assertIs(db.refreshed, user)
 
+    def test_update_user_processes_photo_with_shared_helper(self):
+        user = FakeUser()
+        db = FakeDB(single_user=user)
+        prepared_photo = AsyncPreparedPhoto(
+            photo_path="uploads/raph.jpg",
+            encoding=b"embedding-array",
+            encoding_bytes=b"embedding-bytes",
+        )
+
+        with patch("app.api.routes.users.prepare_user_photo", new=AsyncMock(return_value=prepared_photo)) as prepare_mock:
+            with patch("app.api.routes.users.add_user_to_services") as add_user_mock:
+                result = asyncio.run(
+                    update_user(
+                        user_uuid=str(user.id),
+                        first_name=None,
+                        last_name=None,
+                        email=None,
+                        role=None,
+                        student_number=None,
+                        major=None,
+                        employee_number=None,
+                        department=None,
+                        title=None,
+                        active=None,
+                        photo=object(),
+                        db=db,
+                    )
+                )
+
+        self.assertIs(result, user)
+        self.assertEqual(user.photo_path, "uploads/raph.jpg")
+        self.assertEqual(user.photo_encoding, b"embedding-bytes")
+        prepare_mock.assert_awaited_once()
+        add_user_mock.assert_called_once_with(
+            user.id,
+            "Leonardo Hamato",
+            b"embedding-array",
+        )
+        self.assertTrue(db.committed)
+        self.assertIs(db.refreshed, user)
+
     def test_update_user_raises_404_when_missing(self):
         db = FakeDB(single_user=None)
 
@@ -119,6 +162,13 @@ class UserRouteTests(unittest.TestCase):
 
         self.assertEqual(exc_info.exception.status_code, 404)
         self.assertEqual(exc_info.exception.detail, "User not found")
+
+
+class AsyncPreparedPhoto:
+    def __init__(self, photo_path, encoding, encoding_bytes):
+        self.photo_path = photo_path
+        self.encoding = encoding
+        self.encoding_bytes = encoding_bytes
 
 
 if __name__ == "__main__":

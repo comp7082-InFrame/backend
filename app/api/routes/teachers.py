@@ -1,21 +1,14 @@
-import uuid
-import os
-
-import cv2
-import numpy as np
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.api.deps import add_user_to_services, get_face_service
-from app.config import get_settings
+from app.api.deps import add_user_to_services
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import AdminTeacherResponse
-from app.utils.encoding import encoding_to_bytes
+from app.services.user_photo_service import apply_prepared_user_photo, prepare_user_photo
 
 router = APIRouter()
-settings = get_settings()
 
 
 def build_admin_teacher_response(teacher: User) -> AdminTeacherResponse:
@@ -63,40 +56,23 @@ async def create_teacher(
     if existing_teacher:
         raise HTTPException(status_code=400, detail="Teacher email or employee number already exists")
 
-    contents = await photo.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    if image is None:
-        raise HTTPException(status_code=400, detail="Invalid image file")
-
-    face_service = get_face_service()
-    if face_service is None:
-        raise HTTPException(status_code=503, detail="Face recognition service is not initialized")
-
-    encoding = face_service.extract_face_encoding(image)
-    if encoding is None:
-        raise HTTPException(status_code=400, detail="No face detected in image")
-
-    photo_filename = f"{uuid.uuid4()}.jpg"
-    photo_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, photo_filename))
-    cv2.imwrite(photo_path, image)
+    prepared_photo = await prepare_user_photo(photo)
 
     teacher = User(
         first_name=first_name,
         last_name=last_name,
         email=email,
         role=["teacher"],
-        photo_path=photo_path,
-        photo_encoding=encoding_to_bytes(encoding),
         employee_number=employee_number,
         department=department,
         title=title,
         active=True,
     )
+    apply_prepared_user_photo(teacher, prepared_photo)
     db.add(teacher)
     db.commit()
     db.refresh(teacher)
 
-    add_user_to_services(teacher.id, f"{teacher.first_name} {teacher.last_name}".strip(), encoding)
+    add_user_to_services(teacher.id, f"{teacher.first_name} {teacher.last_name}".strip(), prepared_photo.encoding)
 
     return build_admin_teacher_response(teacher)

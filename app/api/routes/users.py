@@ -1,16 +1,15 @@
 import json
-import os
-import shutil
 from uuid import UUID
-import uuid
 
 from fastapi import APIRouter, Depends, Form, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+from app.api.deps import add_user_to_services
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserResponse
+from app.services.user_photo_service import apply_prepared_user_photo, prepare_user_photo
 
 router = APIRouter()
 
@@ -85,6 +84,7 @@ async def update_user(
 ):
     # Get existing user
     user = _get_user(db, user_uuid)
+    prepared_photo = None
 
     # Build update dictionary, only include non-None values
     update_data = {}
@@ -114,14 +114,9 @@ async def update_user(
 
     # Handle photo upload
     if photo:
-        upload_dir = "uploads/photos"
-        os.makedirs(upload_dir, exist_ok=True)
-        file_ext = os.path.splitext(photo.filename)[1]
-        filename = f"{uuid.uuid4().hex}{file_ext}"
-        file_path = os.path.join(upload_dir, filename)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(photo.file, buffer)
-        update_data["photo_path"] = file_path
+        prepared_photo = await prepare_user_photo(photo, existing_photo_path=user.photo_path)
+        update_data["photo_path"] = prepared_photo.photo_path
+        update_data["photo_encoding"] = prepared_photo.encoding_bytes
 
     # Apply updates
     for field, value in update_data.items():
@@ -129,4 +124,7 @@ async def update_user(
 
     db.commit()
     db.refresh(user)
+    if prepared_photo is not None:
+        apply_prepared_user_photo(user, prepared_photo)
+        add_user_to_services(user.id, f"{user.first_name} {user.last_name}".strip(), prepared_photo.encoding)
     return user

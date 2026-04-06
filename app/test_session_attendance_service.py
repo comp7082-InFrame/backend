@@ -1,7 +1,9 @@
 import unittest
 import uuid
 import importlib.util
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import patch
 
 
 class SessionAttendanceServiceTests(unittest.TestCase):
@@ -130,6 +132,222 @@ class SessionAttendanceServiceTests(unittest.TestCase):
         self.assertEqual(exc_info.exception.detail, "Session not found")
         self.assertFalse(db.committed)
 
+    def test_create_session_commits_when_payload_is_valid(self):
+        if importlib.util.find_spec("pydantic_settings") is None:
+            self.skipTest("backend dependencies are not installed in this environment")
+
+        from app.api.routes.sessions import create_session
+        from app.schemas.attendance_session import AttendanceSessionCreate
+
+        class_id = uuid.uuid4()
+        teacher_id = uuid.uuid4()
+        room_id = uuid.uuid4()
+        payload = AttendanceSessionCreate(
+            class_id=class_id,
+            teacher_id=teacher_id,
+            room_id=room_id,
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        db = FakeCreateSessionDB(
+            class_row=SimpleNamespace(id=class_id, room_id=room_id),
+            teacher=SimpleNamespace(id=teacher_id),
+            room=SimpleNamespace(id=room_id),
+            teacher_assignment=SimpleNamespace(id=uuid.uuid4(), class_id=class_id, teacher_id=teacher_id),
+        )
+
+        with patch("app.api.routes.sessions.init_services") as init_services_mock:
+            result = create_session(payload, db=db)
+
+        self.assertTrue(db.committed)
+        self.assertIs(db.refreshed, result)
+        self.assertEqual(result.class_id, class_id)
+        self.assertEqual(result.teacher_id, teacher_id)
+        self.assertEqual(result.room_id, room_id)
+        init_services_mock.assert_called_once_with(db, class_id=class_id)
+
+    def test_create_session_rejects_invalid_time_range(self):
+        if importlib.util.find_spec("pydantic_settings") is None:
+            self.skipTest("backend dependencies are not installed in this environment")
+
+        from fastapi import HTTPException
+
+        from app.api.routes.sessions import create_session
+        from app.schemas.attendance_session import AttendanceSessionCreate
+
+        payload = AttendanceSessionCreate(
+            class_id=uuid.uuid4(),
+            teacher_id=uuid.uuid4(),
+            room_id=uuid.uuid4(),
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc),
+        )
+        db = FakeCreateSessionDB(class_row=None, teacher=None, room=None, teacher_assignment=None)
+
+        with self.assertRaises(HTTPException) as exc_info:
+            create_session(payload, db=db)
+
+        self.assertEqual(exc_info.exception.status_code, 400)
+        self.assertEqual(exc_info.exception.detail, "end_time must be after start_time")
+        self.assertFalse(db.committed)
+
+    def test_create_session_rejects_missing_class(self):
+        if importlib.util.find_spec("pydantic_settings") is None:
+            self.skipTest("backend dependencies are not installed in this environment")
+
+        from fastapi import HTTPException
+
+        from app.api.routes.sessions import create_session
+        from app.schemas.attendance_session import AttendanceSessionCreate
+
+        payload = AttendanceSessionCreate(
+            class_id=uuid.uuid4(),
+            teacher_id=uuid.uuid4(),
+            room_id=uuid.uuid4(),
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        db = FakeCreateSessionDB(class_row=None, teacher=None, room=None, teacher_assignment=None)
+
+        with self.assertRaises(HTTPException) as exc_info:
+            create_session(payload, db=db)
+
+        self.assertEqual(exc_info.exception.status_code, 404)
+        self.assertEqual(exc_info.exception.detail, "Class not found")
+        self.assertFalse(db.committed)
+
+    def test_create_session_rejects_missing_teacher(self):
+        if importlib.util.find_spec("pydantic_settings") is None:
+            self.skipTest("backend dependencies are not installed in this environment")
+
+        from fastapi import HTTPException
+
+        from app.api.routes.sessions import create_session
+        from app.schemas.attendance_session import AttendanceSessionCreate
+
+        class_id = uuid.uuid4()
+        room_id = uuid.uuid4()
+        payload = AttendanceSessionCreate(
+            class_id=class_id,
+            teacher_id=uuid.uuid4(),
+            room_id=room_id,
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        db = FakeCreateSessionDB(
+            class_row=SimpleNamespace(id=class_id, room_id=room_id),
+            teacher=None,
+            room=SimpleNamespace(id=room_id),
+            teacher_assignment=None,
+        )
+
+        with self.assertRaises(HTTPException) as exc_info:
+            create_session(payload, db=db)
+
+        self.assertEqual(exc_info.exception.status_code, 404)
+        self.assertEqual(exc_info.exception.detail, "Teacher not found")
+        self.assertFalse(db.committed)
+
+    def test_create_session_rejects_missing_room(self):
+        if importlib.util.find_spec("pydantic_settings") is None:
+            self.skipTest("backend dependencies are not installed in this environment")
+
+        from fastapi import HTTPException
+
+        from app.api.routes.sessions import create_session
+        from app.schemas.attendance_session import AttendanceSessionCreate
+
+        class_id = uuid.uuid4()
+        teacher_id = uuid.uuid4()
+        room_id = uuid.uuid4()
+        payload = AttendanceSessionCreate(
+            class_id=class_id,
+            teacher_id=teacher_id,
+            room_id=room_id,
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        db = FakeCreateSessionDB(
+            class_row=SimpleNamespace(id=class_id, room_id=room_id),
+            teacher=SimpleNamespace(id=teacher_id),
+            room=None,
+            teacher_assignment=SimpleNamespace(id=uuid.uuid4(), class_id=class_id, teacher_id=teacher_id),
+        )
+
+        with self.assertRaises(HTTPException) as exc_info:
+            create_session(payload, db=db)
+
+        self.assertEqual(exc_info.exception.status_code, 404)
+        self.assertEqual(exc_info.exception.detail, "Room not found")
+        self.assertFalse(db.committed)
+
+    def test_create_session_rejects_unassigned_teacher(self):
+        if importlib.util.find_spec("pydantic_settings") is None:
+            self.skipTest("backend dependencies are not installed in this environment")
+
+        from fastapi import HTTPException
+
+        from app.api.routes.sessions import create_session
+        from app.schemas.attendance_session import AttendanceSessionCreate
+
+        class_id = uuid.uuid4()
+        teacher_id = uuid.uuid4()
+        room_id = uuid.uuid4()
+        payload = AttendanceSessionCreate(
+            class_id=class_id,
+            teacher_id=teacher_id,
+            room_id=room_id,
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        db = FakeCreateSessionDB(
+            class_row=SimpleNamespace(id=class_id, room_id=room_id),
+            teacher=SimpleNamespace(id=teacher_id),
+            room=SimpleNamespace(id=room_id),
+            teacher_assignment=None,
+        )
+
+        with self.assertRaises(HTTPException) as exc_info:
+            create_session(payload, db=db)
+
+        self.assertEqual(exc_info.exception.status_code, 400)
+        self.assertEqual(exc_info.exception.detail, "Teacher is not assigned to class")
+        self.assertFalse(db.committed)
+
+    def test_create_session_rejects_room_that_does_not_match_class(self):
+        if importlib.util.find_spec("pydantic_settings") is None:
+            self.skipTest("backend dependencies are not installed in this environment")
+
+        from fastapi import HTTPException
+
+        from app.api.routes.sessions import create_session
+        from app.schemas.attendance_session import AttendanceSessionCreate
+
+        class_id = uuid.uuid4()
+        teacher_id = uuid.uuid4()
+        class_room_id = uuid.uuid4()
+        payload_room_id = uuid.uuid4()
+        payload = AttendanceSessionCreate(
+            class_id=class_id,
+            teacher_id=teacher_id,
+            room_id=payload_room_id,
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        db = FakeCreateSessionDB(
+            class_row=SimpleNamespace(id=class_id, room_id=class_room_id),
+            teacher=SimpleNamespace(id=teacher_id),
+            room=SimpleNamespace(id=payload_room_id),
+            teacher_assignment=SimpleNamespace(id=uuid.uuid4(), class_id=class_id, teacher_id=teacher_id),
+        )
+
+        with self.assertRaises(HTTPException) as exc_info:
+            create_session(payload, db=db)
+
+        self.assertEqual(exc_info.exception.status_code, 400)
+        self.assertEqual(exc_info.exception.detail, "Room does not match class")
+        self.assertFalse(db.committed)
+
 
 class FakeSessionAttendanceQuery:
     def __init__(self, rows):
@@ -191,6 +409,51 @@ class FakeSessionAttendanceDB:
 
     def commit(self):
         self.committed = True
+
+
+class FakeCreateSessionQuery:
+    def __init__(self, row):
+        self.row = row
+
+    def filter(self, *args, **kwargs):
+        return self
+
+    def first(self):
+        return self.row
+
+
+class FakeCreateSessionDB:
+    def __init__(self, class_row, teacher, room, teacher_assignment):
+        self.class_row = class_row
+        self.teacher = teacher
+        self.room = room
+        self.teacher_assignment = teacher_assignment
+        self.added = []
+        self.committed = False
+        self.refreshed = None
+
+    def query(self, entity):
+        entity_name = getattr(entity, "__name__", None)
+
+        if entity_name == "Classes":
+            return FakeCreateSessionQuery(self.class_row)
+        if entity_name == "User":
+            return FakeCreateSessionQuery(self.teacher)
+        if entity_name == "Room":
+            return FakeCreateSessionQuery(self.room)
+        if entity_name == "TeacherScheduledClass":
+            return FakeCreateSessionQuery(self.teacher_assignment)
+
+        raise AssertionError(f"Unexpected query target: {entity!r}")
+
+    def add(self, item):
+        self.added.append(item)
+
+    def commit(self):
+        self.committed = True
+
+    def refresh(self, item):
+        self.refreshed = item
 
 
 if __name__ == "__main__":
