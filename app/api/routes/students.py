@@ -1,24 +1,19 @@
 import uuid
-import os
 
-import cv2
-import numpy as np
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.api.deps import add_user_to_services, get_face_service, get_live_presence_tracker
-from app.config import get_settings
+from app.api.deps import add_user_to_services, get_live_presence_tracker
 from app.database import get_db
 from app.models.course import Course
 from app.models.student_course import StudentCourse
 from app.models.user import User
 from app.schemas.user import AdminStudentResponse, UserResponse
+from app.services.user_photo_service import apply_prepared_user_photo, prepare_user_photo
 from app.utils.admin_students import parse_course_ids
-from app.utils.encoding import encoding_to_bytes
 
 router = APIRouter()
-settings = get_settings()
 
 
 def build_admin_student_response(student: User, course_ids: list[uuid.UUID]) -> AdminStudentResponse:
@@ -106,34 +101,17 @@ async def create_student(
     if len(valid_course_ids) != len(parsed_course_ids):
         raise HTTPException(status_code=400, detail="One or more selected classes are invalid")
 
-    contents = await photo.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    if image is None:
-        raise HTTPException(status_code=400, detail="Invalid image file")
-
-    face_service = get_face_service()
-    if face_service is None:
-        raise HTTPException(status_code=503, detail="Face recognition service is not initialized")
-
-    encoding = face_service.extract_face_encoding(image)
-    if encoding is None:
-        raise HTTPException(status_code=400, detail="No face detected in image")
-
-    photo_filename = f"{uuid.uuid4()}.jpg"
-    photo_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, photo_filename))
-    cv2.imwrite(photo_path, image)
+    prepared_photo = await prepare_user_photo(photo)
 
     student = User(
         first_name=first_name,
         last_name=last_name,
         email=email,
         role=["student"],
-        photo_path=photo_path,
-        photo_encoding=encoding_to_bytes(encoding),
         student_number=student_number,
         active=True,
     )
+    apply_prepared_user_photo(student, prepared_photo)
     db.add(student)
     db.flush()
 
@@ -149,6 +127,6 @@ async def create_student(
     db.commit()
     db.refresh(student)
 
-    add_user_to_services(student.id, f"{student.first_name} {student.last_name}".strip(), encoding)
+    add_user_to_services(student.id, f"{student.first_name} {student.last_name}".strip(), prepared_photo.encoding)
 
     return build_admin_student_response(student, parsed_course_ids)
