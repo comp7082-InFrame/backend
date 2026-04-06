@@ -75,22 +75,11 @@ async def lifespan(app: FastAPI):
     # Create upload directory
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
-    # Initialize face recognition services
+    # Initialize the default global roster once at startup.
     db = SessionLocal()
     try:
-        from app.models import AttendanceSession
-
-        latest_session = (
-            db.query(AttendanceSession)
-            .order_by(AttendanceSession.id.desc())
-            .first()
-        )
-        if latest_session is not None:
-            init_services(db, class_id=latest_session.class_id)
-            logger.info("Services initialized for session %s", latest_session.id)
-        else:
-            init_services(db)
-            logger.info("Services initialized with global roster")
+        init_services(db)
+        logger.info("Services initialized with global roster")
     finally:
         db.close()
 

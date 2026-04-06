@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import init_services
 from app.database import get_db
 from app.models import AttendanceSession
 from app.models.attendance_record import AttendanceRecord
@@ -74,7 +73,6 @@ def create_session(
     db.add(db_sess)
     db.commit()
     db.refresh(db_sess)
-    init_services(db, class_id=db_sess.class_id)
 
     return db_sess
 

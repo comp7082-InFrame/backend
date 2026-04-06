@@ -156,15 +156,13 @@ class SessionAttendanceServiceTests(unittest.TestCase):
             teacher_assignment=SimpleNamespace(id=uuid.uuid4(), class_id=class_id, teacher_id=teacher_id),
         )
 
-        with patch("app.api.routes.sessions.init_services") as init_services_mock:
-            result = create_session(payload, db=db)
+        result = create_session(payload, db=db)
 
         self.assertTrue(db.committed)
         self.assertIs(db.refreshed, result)
         self.assertEqual(result.class_id, class_id)
         self.assertEqual(result.teacher_id, teacher_id)
         self.assertEqual(result.room_id, room_id)
-        init_services_mock.assert_called_once_with(db, class_id=class_id)
 
     def test_create_session_rejects_invalid_time_range(self):
         if importlib.util.find_spec("pydantic_settings") is None:
