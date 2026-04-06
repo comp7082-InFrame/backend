@@ -10,7 +10,7 @@ from app.schemas.building import BuildingCreate, BuildingResponse, BuildingUpdat
 from app.schemas.campus import CampusCreate, CampusResponse, CampusUpdate
 from app.schemas.classes import ClassResponse, StudentScheduleResponse, TeacherClassViewResponse
 from app.schemas.course import CourseCreate, CourseResponse
-from app.schemas.regconition_history import RecognitionHistoryCreate, RecognitionHistoryResponse
+from app.schemas.recognition_history import RecognitionHistoryCreate, RecognitionHistoryResponse
 from app.schemas.room import RoomCreate, RoomResponse, RoomUpdate
 from app.schemas.schedule_class_teacher import TeacherScheduledClassCreate, TeacherScheduledClassResponse
 from app.schemas.student_course import StudentCourseCreate, StudentCourseResponse

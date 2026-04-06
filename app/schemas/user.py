@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional
 from uuid import UUID
 
@@ -24,8 +24,7 @@ class UserResponse(UserBase):
     title: Optional[str] = None
     active: Optional[bool] = True
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserUpdate(BaseModel):
@@ -51,8 +50,7 @@ class ClassUserResponse(BaseModel):
     class_id: UUID
     photo_path: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminStudentResponse(BaseModel):
@@ -67,8 +65,7 @@ class AdminStudentResponse(BaseModel):
     photo_path: Optional[str] = None
     active: bool = True
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AdminTeacherResponse(BaseModel):
@@ -83,5 +80,4 @@ class AdminTeacherResponse(BaseModel):
     photo_path: Optional[str] = None
     active: bool = True
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

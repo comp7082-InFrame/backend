@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class StudentCourseBase(BaseModel):
@@ -18,5 +18,4 @@ class StudentCourseResponse(StudentCourseBase):
     id: UUID
     enrollment_date: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

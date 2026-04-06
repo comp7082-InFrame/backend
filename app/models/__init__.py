@@ -4,7 +4,7 @@ from app.models.building import Building
 from app.models.campus import Campus
 from app.models.classes import Classes, TeacherClass, StudentSchedule
 from app.models.course import Course
-from app.models.regconition_history import RecognitionHistory
+from app.models.recognition_history import RecognitionHistory
 from app.models.room import Room
 from app.models.schedule_class_teacher import TeacherScheduledClass
 from app.models.student_course import StudentCourse

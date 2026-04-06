@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import date
 from uuid import UUID
 
@@ -17,5 +17,4 @@ class TermCreate(TermBase):
 class TermResponse(TermBase):
     id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

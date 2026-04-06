@@ -77,7 +77,7 @@ def create_session(
     return db_sess
 
 @router.get("/", response_model=list[AttendanceSessionListItem])
-def getSessions(course_id: uuid.UUID, class_id:Optional[uuid.UUID]=None, db: Session = Depends(get_db)):
+def get_sessions(course_id: uuid.UUID, class_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db)):
     query = (
         db.query(AttendanceSession, Course.name.label('course_name'), Course.term_id )
         .join(Classes, Classes.id == AttendanceSession.class_id)
@@ -105,7 +105,7 @@ def getSessions(course_id: uuid.UUID, class_id:Optional[uuid.UUID]=None, db: Ses
     
 
 @router.get("/records", response_model=list[SessionAttendanceRecordItem])
-def getSessionRecords(session_id: uuid.UUID, db: Session = Depends(get_db)):
+def get_session_records(session_id: uuid.UUID, db: Session = Depends(get_db)):
     session = db.query(AttendanceSession).filter(AttendanceSession.id == session_id).first()
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
