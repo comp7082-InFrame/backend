@@ -1,6 +1,5 @@
 import unittest
 import uuid
-import importlib.util
 
 from app.api.routes.courses import get_courses
 
@@ -38,9 +37,6 @@ class FakeCourseDB:
 
 class CourseRouteTests(unittest.TestCase):
     def test_get_courses_without_teacher_filter_avoids_teacher_join(self):
-        if importlib.util.find_spec("pydantic_settings") is None:
-            self.skipTest("backend dependencies are not installed in this environment")
-
         course = type("CourseRow", (), {"id": uuid.uuid4(), "term_id": uuid.uuid4(), "name": "Math", "description": None, "active": True})()
         db = FakeCourseDB([course])
 
@@ -51,9 +47,6 @@ class CourseRouteTests(unittest.TestCase):
         self.assertFalse(db.last_query.distinct_called)
 
     def test_get_courses_with_teacher_filter_uses_distinct(self):
-        if importlib.util.find_spec("pydantic_settings") is None:
-            self.skipTest("backend dependencies are not installed in this environment")
-
         course = type("CourseRow", (), {"id": uuid.uuid4(), "term_id": uuid.uuid4(), "name": "Science", "description": None, "active": True})()
         db = FakeCourseDB([course])
 
@@ -62,7 +55,3 @@ class CourseRouteTests(unittest.TestCase):
         self.assertEqual(result, [course])
         self.assertEqual(len(db.last_query.join_calls), 1)
         self.assertTrue(db.last_query.distinct_called)
-
-
-if __name__ == "__main__":
-    unittest.main()
