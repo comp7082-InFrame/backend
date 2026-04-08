@@ -14,7 +14,7 @@ class DrawFaceBoxesTests(unittest.TestCase):
             {
                 "user_id": user_id,
                 "confidence": 0.91,
-                "bbox": {"x": 4, "y": 4, "width": 16, "height": 16},
+                "bbox": {"x": 4, "y": 24, "width": 16, "height": 16},
             }
         ]
 
@@ -23,6 +23,16 @@ class DrawFaceBoxesTests(unittest.TestCase):
         self.assertEqual(annotated.shape, frame.shape)
         self.assertGreater(int(annotated.sum()), 0)
 
+    def test_unknown_face_draws_red_box(self):
+        frame = np.zeros((40, 40, 3), dtype=np.uint8)
+        faces = [
+            {
+                "user_id": None,
+                "confidence": 0.0,
+                "bbox": {"x": 4, "y": 24, "width": 16, "height": 16},
+            }
+        ]
 
-if __name__ == "__main__":
-    unittest.main()
+        annotated = draw_face_boxes(frame, faces)
+
+        self.assertEqual(tuple(annotated[24, 4]), (0, 0, 255))

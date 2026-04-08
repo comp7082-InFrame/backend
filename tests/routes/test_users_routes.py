@@ -5,14 +5,16 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
-from app.api.routes.users import get_user_by_id, update_user
+from app.api.routes.users import get_user_by_id, get_users, update_user
 
 
 class FakeQuery:
     def __init__(self, db):
         self.db = db
+        self.filter_calls = []
 
     def filter(self, *args, **kwargs):
+        self.filter_calls.append((args, kwargs))
         return self
 
     def order_by(self, *args, **kwargs):
@@ -31,9 +33,11 @@ class FakeDB:
         self.users = users or []
         self.committed = False
         self.refreshed = None
+        self.last_query = None
 
     def query(self, model):
-        return FakeQuery(self)
+        self.last_query = FakeQuery(self)
+        return self.last_query
 
     def commit(self):
         self.committed = True
@@ -60,6 +64,24 @@ class FakeUser:
 
 
 class UserRouteTests(unittest.TestCase):
+    def test_get_users_returns_active_users(self):
+        users = [FakeUser(), FakeUser()]
+        db = FakeDB(users=users)
+
+        result = get_users(db=db)
+
+        self.assertEqual(result, users)
+        self.assertEqual(len(db.last_query.filter_calls), 1)
+
+    def test_get_users_applies_role_filter(self):
+        users = [FakeUser()]
+        db = FakeDB(users=users)
+
+        result = get_users(role="teacher", db=db)
+
+        self.assertEqual(result, users)
+        self.assertEqual(len(db.last_query.filter_calls), 2)
+
     def test_get_user_by_id_returns_user(self):
         user = FakeUser()
         db = FakeDB(single_user=user)
@@ -148,6 +170,21 @@ class UserRouteTests(unittest.TestCase):
         self.assertTrue(db.committed)
         self.assertIs(db.refreshed, user)
 
+    def test_update_user_falls_back_to_single_role_string_when_json_is_invalid(self):
+        user = FakeUser()
+        db = FakeDB(single_user=user)
+
+        asyncio.run(
+            update_user(
+                user_uuid=str(user.id),
+                role="teacher",
+                photo=None,
+                db=db,
+            )
+        )
+
+        self.assertEqual(user.role, ["teacher"])
+
     def test_update_user_raises_404_when_missing(self):
         db = FakeDB(single_user=None)
 
@@ -169,7 +206,3 @@ class AsyncPreparedPhoto:
         self.photo_path = photo_path
         self.encoding = encoding
         self.encoding_bytes = encoding_bytes
-
-
-if __name__ == "__main__":
-    unittest.main()
