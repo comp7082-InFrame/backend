@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 
 from app.database import get_db
@@ -26,8 +26,7 @@ class AttendanceStatus(BaseModel):
     face_recognized: Optional[bool] = None
     timestamp: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AttendanceRecordResponse(BaseModel):
@@ -38,8 +37,7 @@ class AttendanceRecordResponse(BaseModel):
     face_recognized: bool
     timestamp: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/current", response_model=List[AttendanceStatus])

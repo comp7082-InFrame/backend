@@ -4,35 +4,80 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 
-from app.api.deps import init_services
 from app.database import get_db
 from app.models import AttendanceSession
 from app.models.attendance_record import AttendanceRecord
 from app.models.classes import Classes
 from app.models.course import Course
+from app.models.room import Room
+from app.models.schedule_class_teacher import TeacherScheduledClass
 from app.models.student_course import StudentCourse
 from app.models.user import User
-from app.schemas import AttendanceSessionCreate, AttendanceSessionResponse
+from app.schemas import (
+    AttendanceSessionCreate,
+    AttendanceSessionListItem,
+    AttendanceSessionResponse,
+    SessionAttendanceRecordItem,
+)
+from app.services.session_attendance_service import mark_absent_students_for_session
 
 router = APIRouter()
+
+
+def _validate_session_payload(
+    payload: AttendanceSessionCreate,
+    db: Session,
+) -> None:
+    if payload.end_time <= payload.start_time:
+        raise HTTPException(status_code=400, detail="end_time must be after start_time")
+
+    class_row = db.query(Classes).filter(Classes.id == payload.class_id).first()
+    if class_row is None:
+        raise HTTPException(status_code=404, detail="Class not found")
+
+    teacher = (
+        db.query(User)
+        .filter(User.id == payload.teacher_id, User.role.contains(["teacher"]))
+        .first()
+    )
+    if teacher is None:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+
+    room = db.query(Room).filter(Room.id == payload.room_id).first()
+    if room is None:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    teacher_assignment = (
+        db.query(TeacherScheduledClass)
+        .filter(
+            TeacherScheduledClass.class_id == payload.class_id,
+            TeacherScheduledClass.teacher_id == payload.teacher_id,
+        )
+        .first()
+    )
+    if teacher_assignment is None:
+        raise HTTPException(status_code=400, detail="Teacher is not assigned to class")
+
+    if class_row.room_id != payload.room_id:
+        raise HTTPException(status_code=400, detail="Room does not match class")
+
 
 @router.post("/", response_model=AttendanceSessionResponse)
 def create_session(
     payload: AttendanceSessionCreate,
     db: Session = Depends(get_db),
 ):
+    _validate_session_payload(payload, db)
     db_sess = AttendanceSession(**payload.model_dump())
     db.add(db_sess)
     db.commit()
     db.refresh(db_sess)
-    init_services(db, class_id=db_sess.class_id)
 
     return db_sess
 
-@router.get("/")
-def getSessions(course_id: uuid.UUID, class_id:Optional[uuid.UUID]=None, db: Session = Depends(get_db)):
+@router.get("/", response_model=list[AttendanceSessionListItem])
+def get_sessions(course_id: uuid.UUID, class_id: Optional[uuid.UUID] = None, db: Session = Depends(get_db)):
     query = (
         db.query(AttendanceSession, Course.name.label('course_name'), Course.term_id )
         .join(Classes, Classes.id == AttendanceSession.class_id)
@@ -44,19 +89,23 @@ def getSessions(course_id: uuid.UUID, class_id:Optional[uuid.UUID]=None, db: Ses
         query = query.filter(Classes.id == class_id)
     results = query.all()
 
-    response = [
-        {
-            **session.__dict__,
-            "course_name": course_name,
-            "term_id": term_id
-        }
+    return [
+        AttendanceSessionListItem(
+            id=session.id,
+            class_id=session.class_id,
+            teacher_id=session.teacher_id,
+            room_id=session.room_id,
+            start_time=session.start_time,
+            end_time=session.end_time,
+            course_name=course_name,
+            term_id=term_id,
+        )
         for session, course_name, term_id in results
     ]
-    return response
     
 
-@router.get("/records")
-def getSessionRecords(session_id: uuid.UUID, db: Session = Depends(get_db)):
+@router.get("/records", response_model=list[SessionAttendanceRecordItem])
+def get_session_records(session_id: uuid.UUID, db: Session = Depends(get_db)):
     session = db.query(AttendanceSession).filter(AttendanceSession.id == session_id).first()
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -81,24 +130,21 @@ def getSessionRecords(session_id: uuid.UUID, db: Session = Depends(get_db)):
     )
     record_map = {record.student_id: record for record in records}
 
-    response = []
-    for student_id, first_name, last_name, student_number in students:
-        record = record_map.get(student_id)
-        response.append(
-            {
-                "id": str(record.id) if record else f"{session_id}:{student_id}",
-                "session_id": session_id,
-                "student_id": student_id,
-                "status": record.status if record else "absent",
-                "face_recognized": record.face_recognized if record else False,
-                "timestamp": record.timestamp if record else None,
-                "first_name": first_name,
-                "last_name": last_name,
-                "student_number": student_number,
-            }
+    return [
+        SessionAttendanceRecordItem(
+            id=str(record.id) if record else f"{session_id}:{student_id}",
+            session_id=session_id,
+            student_id=student_id,
+            status=record.status if record else "absent",
+            face_recognized=record.face_recognized if record else False,
+            timestamp=record.timestamp if record else None,
+            first_name=first_name,
+            last_name=last_name,
+            student_number=student_number,
         )
-
-    return response
+        for student_id, first_name, last_name, student_number in students
+        for record in [record_map.get(student_id)]
+    ]
 
 
 class EndSessionRequest(BaseModel):
@@ -114,8 +160,7 @@ def end_session(request: EndSessionRequest, db: Session = Depends(get_db)):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Mark absent students
-    db.execute(text("SELECT mark_absent_attendance_records(:session_id)"), {"session_id": session_id})
+    mark_absent_students_for_session(db, session)
     db.commit()
 
     return {"status": "success", "message": "Session ended and absent students marked"}

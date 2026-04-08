@@ -8,12 +8,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from uvicorn.protocols.utils import ClientDisconnected
 
 from app.api.deps import (
-    get_face_service,
+    build_runtime,
+    build_runtime_for_session,
     get_live_presence_tracker,
-    get_presence_tracker,
-    get_user_names,
-    init_services,
-    start_services_for_session,
 )
 from app.database import SessionLocal
 from app.services import CameraService
@@ -42,13 +39,14 @@ async def video_stream(
     db = SessionLocal()
 
     try:
-        face_service = get_face_service()
         if session_id is not None:
-            face_service = start_services_for_session(session_id, db)
+            runtime = build_runtime_for_session(session_id, db)
         elif class_id is not None:
-            init_services(db, class_id=class_id)
-            face_service = get_face_service()
+            runtime = build_runtime(db, class_id=class_id)
+        else:
+            runtime = build_runtime(db)
 
+        face_service = runtime.face_service
         if face_service is None:
             await websocket.send_json({
                 "type": "error",
@@ -56,9 +54,10 @@ async def video_stream(
             })
             return
 
-        presence_tracker = get_presence_tracker()
-        live_presence_tracker = get_live_presence_tracker()
-        user_names = get_user_names()
+        presence_tracker = runtime.presence_tracker
+        live_presence_tracker = runtime.live_presence_tracker
+        user_names = runtime.user_names
+        shared_live_presence_tracker = get_live_presence_tracker()
 
         camera = CameraService()
         if not camera.start():
@@ -82,10 +81,14 @@ async def video_stream(
                             face["name"] = None
                             face["status"] = "unknown"
 
+                    seen_user_ids = [face["user_id"] for face in faces if face.get("user_id") is not None]
                     if live_presence_tracker is not None:
-                        live_presence_tracker.mark_seen(
-                            [face["user_id"] for face in faces if face.get("user_id") is not None]
-                        )
+                        live_presence_tracker.mark_seen(seen_user_ids)
+                    if (
+                        shared_live_presence_tracker is not None
+                        and shared_live_presence_tracker is not live_presence_tracker
+                    ):
+                        shared_live_presence_tracker.mark_seen(seen_user_ids)
 
                     events = presence_tracker.update(faces)
 

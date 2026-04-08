@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from typing import Dict
 import uuid
 import numpy as np
@@ -21,13 +22,16 @@ settings = get_settings()
 EXPECTED_EMBEDDING_BYTES = 512 * 4  # 2048 bytes for 512-dim float32
 
 
-def init_services(db: Session, class_id: uuid.UUID | None = None):
-    """Initialize recognition services from the database.
+@dataclass
+class RecognitionRuntime:
+    face_service: FaceService
+    presence_tracker: PresenceTracker
+    live_presence_tracker: LivePresenceTracker
+    user_names: Dict[uuid.UUID, str]
 
-    When class_id is provided, only users linked to that class are loaded.
-    Otherwise all active users with face encodings are loaded.
-    """
-    global face_service, presence_tracker, live_presence_tracker, user_names
+
+def _load_runtime_users(db: Session, class_id: uuid.UUID | None = None) -> list[User]:
+    """Load users eligible for recognition for a given runtime scope."""
 
     if class_id is not None:
         rows = (
@@ -36,12 +40,17 @@ def init_services(db: Session, class_id: uuid.UUID | None = None):
             .all()
         )
         user_ids = [row.id for row in rows]
-        users = db.query(User).filter(User.id.in_(user_ids), User.photo_encoding != None).all()
-    else:
-        users = db.query(User).filter(User.photo_encoding != None, User.active == True).all()
+        return db.query(User).filter(User.id.in_(user_ids), User.photo_encoding != None).all()
+
+    return db.query(User).filter(User.photo_encoding != None, User.active == True).all()
+
+
+def build_runtime(db: Session, class_id: uuid.UUID | None = None) -> RecognitionRuntime:
+    """Build an isolated recognition runtime from the database."""
+    users = _load_runtime_users(db, class_id=class_id)
 
     known_encodings = {}
-    user_names.clear()
+    runtime_user_names: Dict[uuid.UUID, str] = {}
 
     for user in users:
         if len(user.photo_encoding) != EXPECTED_EMBEDDING_BYTES:
@@ -52,21 +61,34 @@ def init_services(db: Session, class_id: uuid.UUID | None = None):
             )
             continue
         known_encodings[user.id] = bytes_to_encoding(user.photo_encoding)
-        user_names[user.id] = f"{user.first_name} {user.last_name}".strip()
+        runtime_user_names[user.id] = f"{user.first_name} {user.last_name}".strip()
 
-    face_service = FaceService(known_encodings)
-    presence_tracker = PresenceTracker()
-    live_presence_tracker = LivePresenceTracker(ttl_seconds=settings.LIVE_PRESENCE_TTL_SECONDS)
+    return RecognitionRuntime(
+        face_service=FaceService(known_encodings),
+        presence_tracker=PresenceTracker(),
+        live_presence_tracker=LivePresenceTracker(ttl_seconds=settings.LIVE_PRESENCE_TTL_SECONDS),
+        user_names=runtime_user_names,
+    )
 
 
-def start_services_for_session(session_id: uuid.UUID, db: Session) -> FaceService:
-    """Initialize services for a specific attendance session."""
+def init_services(db: Session, class_id: uuid.UUID | None = None):
+    """Initialize the process-global recognition services from the database."""
+    global face_service, presence_tracker, live_presence_tracker, user_names
+
+    runtime = build_runtime(db, class_id=class_id)
+    face_service = runtime.face_service
+    presence_tracker = runtime.presence_tracker
+    live_presence_tracker = runtime.live_presence_tracker
+    user_names = dict(runtime.user_names)
+
+
+def build_runtime_for_session(session_id: uuid.UUID, db: Session) -> RecognitionRuntime:
+    """Build an isolated recognition runtime for a specific attendance session."""
     sess = db.query(AttendanceSession).filter(AttendanceSession.id == session_id).one_or_none()
     if sess is None:
         raise HTTPException(status_code=404, detail="Attendance session not found")
 
-    init_services(db, class_id=sess.class_id)
-    return get_face_service()
+    return build_runtime(db, class_id=sess.class_id)
 
 
 def get_face_service() -> FaceService:

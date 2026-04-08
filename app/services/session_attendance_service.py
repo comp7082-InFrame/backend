@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterable, Optional
 
 from sqlalchemy.orm import Session
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.attendance_record import AttendanceRecord
 from app.models.attendance_session import AttendanceSession
 from app.models.classes import Classes
-from app.models.regconition_history import RecognitionHistory
+from app.models.recognition_history import RecognitionHistory
 from app.models.schedule_class_teacher import TeacherScheduledClass
 from app.models.student_course import StudentCourse
 
@@ -89,6 +89,51 @@ def get_or_create_session_for_class(
     db.add(created)
     db.flush()
     return created
+
+
+def mark_absent_students_for_session(
+    db: Session,
+    session: AttendanceSession,
+    recorded_at: datetime | None = None,
+) -> int:
+    class_row = db.query(Classes).filter(Classes.id == session.class_id).first()
+    if class_row is None:
+        return 0
+
+    enrolled_rows = (
+        db.query(StudentCourse.student_id)
+        .filter(
+            StudentCourse.course_id == class_row.course_id,
+            StudentCourse.status == "active",
+        )
+        .all()
+    )
+    enrolled_student_ids = {row.student_id for row in enrolled_rows}
+
+    existing_rows = (
+        db.query(AttendanceRecord.student_id)
+        .filter(AttendanceRecord.session_id == session.id)
+        .all()
+    )
+    existing_student_ids = {row.student_id for row in existing_rows}
+
+    missing_student_ids = sorted(enrolled_student_ids - existing_student_ids, key=str)
+    if not missing_student_ids:
+        return 0
+
+    absent_timestamp = recorded_at or datetime.now(timezone.utc)
+    for student_id in missing_student_ids:
+        db.add(
+            AttendanceRecord(
+                session_id=session.id,
+                student_id=student_id,
+                status="absent",
+                face_recognized=False,
+                timestamp=absent_timestamp,
+            )
+        )
+
+    return len(missing_student_ids)
 
 
 def record_attendance_from_recognition(

@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.database import get_db
 from app.models.user import ClassUsers
@@ -18,8 +18,7 @@ class RosterEntry(BaseModel):
     class_id: uuid.UUID
     face_registered: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.get("/", response_model=List[RosterEntry])

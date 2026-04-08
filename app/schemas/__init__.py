@@ -1,11 +1,16 @@
 from app.schemas.attendance import FaceDetection, StreamFrame, AttendanceUpdate
 from app.schemas.attendance_record import AttendanceRecordCreate, AttendanceRecordResponse
-from app.schemas.attendance_session import AttendanceSessionCreate, AttendanceSessionResponse
+from app.schemas.attendance_session import (
+    AttendanceSessionCreate,
+    AttendanceSessionListItem,
+    AttendanceSessionResponse,
+    SessionAttendanceRecordItem,
+)
 from app.schemas.building import BuildingCreate, BuildingResponse, BuildingUpdate
 from app.schemas.campus import CampusCreate, CampusResponse, CampusUpdate
 from app.schemas.classes import ClassResponse, StudentScheduleResponse, TeacherClassViewResponse
 from app.schemas.course import CourseCreate, CourseResponse
-from app.schemas.regconition_history import RecognitionHistoryCreate, RecognitionHistoryResponse
+from app.schemas.recognition_history import RecognitionHistoryCreate, RecognitionHistoryResponse
 from app.schemas.room import RoomCreate, RoomResponse, RoomUpdate
 from app.schemas.schedule_class_teacher import TeacherScheduledClassCreate, TeacherScheduledClassResponse
 from app.schemas.student_course import StudentCourseCreate, StudentCourseResponse
@@ -19,7 +24,9 @@ __all__ = [
     "AttendanceRecordCreate",
     "AttendanceRecordResponse",
     "AttendanceSessionCreate",
+    "AttendanceSessionListItem",
     "AttendanceSessionResponse",
+    "SessionAttendanceRecordItem",
     "BuildingCreate",
     "BuildingResponse",
     "BuildingUpdate",

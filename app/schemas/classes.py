@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from typing import Optional
 
@@ -36,15 +36,13 @@ class TeacherClassViewResponse(BaseModel):
     teacher_name: Optional[str] = None
     status: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ClassResponse(ClassBase):
     class_id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentScheduleBase(BaseModel):
@@ -69,8 +67,7 @@ class StudentScheduleBase(BaseModel):
     campus_id: UUID
     campus_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class StudentScheduleResponse(StudentScheduleBase):

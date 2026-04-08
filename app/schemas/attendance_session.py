@@ -1,5 +1,5 @@
-from typing import List
-from pydantic import BaseModel
+from typing import List, Optional
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from uuid import UUID
 
@@ -20,7 +20,24 @@ class AttendanceSessionCreate(AttendanceSessionBase):
 
 class AttendanceSessionResponse(AttendanceSessionBase):
     id: UUID
-    records: List[AttendanceRecordResponse] = []
+    records: List[AttendanceRecordResponse] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AttendanceSessionListItem(AttendanceSessionBase):
+    id: UUID
+    course_name: str
+    term_id: UUID
+
+
+class SessionAttendanceRecordItem(BaseModel):
+    id: str
+    session_id: UUID
+    student_id: UUID
+    status: str
+    face_recognized: bool
+    timestamp: Optional[datetime] = None
+    first_name: str
+    last_name: str
+    student_number: Optional[str] = None
