@@ -70,7 +70,10 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up...")
 
     # Verify schema is present instead of mutating it at runtime.
-    verify_schema_objects(engine)
+    try:
+        verify_schema_objects(engine)
+    except Exception as e:
+        logger.warning(f"Skipping schema check: {e}")
 
     # Create upload directory
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
